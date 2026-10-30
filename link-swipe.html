@@ -1,0 +1,216 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#f7f4f2"><title>Link Swipe practice</title>
+<style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
+body{display:flex;justify-content:center;align-items:stretch;overscroll-behavior:none}
+#app{width:100%;max-width:430px;min-height:100%;background:var(--bg,#f7f4f2);display:flex;flex-direction:column;position:relative;box-shadow:0 0 24px rgba(0,0,0,.08)}
+.serif{font-family:Georgia,"Times New Roman",serif}
+h1{font-family:Georgia,serif;font-weight:400;font-size:34px;margin:6px 0 10px;line-height:1.1}
+h2{font-family:Georgia,serif;font-weight:400;font-size:24px;margin:4px 0 8px}
+.cat{display:flex;align-items:center;gap:8px;font-size:14px}.cat i{width:14px;height:14px;background:var(--accent);display:inline-block}
+.pad{padding:18px 18px}
+.screen{display:none;flex:1;flex-direction:column}.screen.on{display:flex}
+.rules{font-size:14.5px;line-height:1.45}.rules li{margin:4px 0}
+.btn{appearance:none;border:1px solid #bdb6b0;background:#fff;border-radius:6px;padding:12px 14px;font-size:16px;cursor:pointer;color:inherit;touch-action:manipulation}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.modes{display:grid;gap:10px;margin-top:10px}
+.modes .btn{text-align:left}.modes small{display:block;opacity:.7;font-size:12.5px;margin-top:2px}
+.hud{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 6px;font-size:15px}
+.hud .ttl{font-family:Georgia,serif}
+.tbar{height:3px;background:#d8d2cd;margin:0 16px}.tbar div{height:100%;background:#3a3030;width:100%}
+#stage{flex:1;display:flex;flex-direction:column;position:relative;touch-action:none;user-select:none;-webkit-user-select:none}
+.foot{border-top:1px solid #d8d2cd;display:flex;justify-content:flex-end;padding:10px 14px;min-height:56px;align-items:center;gap:10px}
+.flash{position:absolute;left:0;right:0;bottom:70px;text-align:center;pointer-events:none;font-size:15px;opacity:0;transition:opacity .15s}
+.flash.on{opacity:1}.flash span{background:#fff;border:1px solid #ccc;padding:8px 12px;border-radius:6px;display:inline-block;max-width:92%}
+.flash.ok span{border-color:#3d8b4a;color:#2c6b37}.flash.bad span{border-color:#b33;color:#9b2a2a}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.stat div{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px}.stat b{display:block;font-size:24px;font-family:Georgia,serif;font-weight:400}
+.stat span{font-size:12.5px;opacity:.7}
+table.rev{width:100%;border-collapse:collapse;font-size:13px}table.rev td{border-bottom:1px solid #e3dedb;padding:5px 3px}
+.ok{color:#2c6b37}.bad{color:#9b2a2a}
+.hist{font-size:13px;opacity:.85}
+a.back{color:inherit;font-size:14px}
+.note{font-size:12px;opacity:.65;margin-top:10px}
+
+.arrows{display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center;padding:16px 10px 0;gap:4px}
+.arrows button{background:none;border:0;cursor:pointer;color:inherit;font-size:16px;padding:4px;touch-action:manipulation}
+.tri{width:0;height:0;margin:10px auto 0;opacity:.85}
+.tl{border-top:24px solid transparent;border-bottom:24px solid transparent;border-right:30px solid #cdbf8a}
+.tr{border-top:24px solid transparent;border-bottom:24px solid transparent;border-left:30px solid #cdbf8a}
+.td{border-left:24px solid transparent;border-right:24px solid transparent;border-top:30px solid #cdbf8a;margin-top:18px}
+.card{margin:26px 18px 0;background:#fff;border:1px solid #ddd;box-shadow:0 3px 8px rgba(0,0,0,.08);text-align:center;font-family:Georgia,serif;font-size:26px;padding:4px 16px;touch-action:none;cursor:grab;transition:transform .18s,opacity .18s}
+.card div{padding:16px 0}.card hr{border:0;border-top:1px solid #8a7f72;margin:0 10px}
+</style></head><body><div id="app"></div><script>// Shared harness: screens, per-item timer, adaptive staircase, scoring, localStorage history.
+const H = (() => {
+  const $ = s => document.querySelector(s);
+  let G, mode, idx, level, results, tStart, tItemStart, limit, raf, itemDone, paused = false, pauseAt = 0, runStart;
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  const MODES = g => ({
+    test: { label: "Official-style test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
+    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 easy questions with feedback after each answer" },
+    hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
+  });
+  function init(game) {
+    G = game;
+    document.title = G.title + " practice";
+    document.documentElement.style.setProperty("--accent", G.accent);
+    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
+    const ms = MODES(G);
+    $("#app").innerHTML = `
+    <section class="screen on" id="sIntro"><div class="pad">
+      <a class="back" href="index.html">&larr; All games</a>
+      <div style="height:24px"></div>
+      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
+      <div class="rules">${G.rules}</div>
+      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
+      <div class="hist" id="histIntro"></div>
+      <div class="note">Unofficial practice mock. Item content is generated, not the real item bank.</div>
+    </div></section>
+    <section class="screen" id="sGame">
+      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
+      <div class="tbar"><div id="hBar"></div></div>
+      <div id="stage"></div>
+      <div class="flash" id="flash"><span></span></div>
+      <div class="foot" id="foot"></div>
+    </section>
+    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
+    document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
+    showHist("#histIntro");
+    G.setup($("#stage"), $("#foot"));
+    window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && !itemDone && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
+  }
+  function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
+  function start(m) {
+    mode = Object.assign({ key: m }, MODES(G)[m]); idx = 0; level = mode.start; results = []; runStart = performance.now();
+    $("#hTot").textContent = mode.n; $("#hMode").textContent = m === "practice" ? "Practice" : m === "hard" ? "Hard drill" : G.title;
+    if (G.onStart) G.onStart(mode);
+    show("sGame"); next();
+  }
+  function next() {
+    if (idx >= mode.n) return end();
+    $("#hNum").textContent = idx + 1; itemDone = false; paused = false;
+    const item = G.newItem(level);
+    G.render(item);
+    tItemStart = performance.now();
+    limit = G.perItem ? G.perItem * mode.timer * (G.timeFactor ? G.timeFactor(item) : 1) : 0;
+    cancelAnimationFrame(raf); tick();
+  }
+  function elapsed() { return ((paused ? pauseAt : performance.now()) - tItemStart) / 1000; }
+  function tick() {
+    if (itemDone) return;
+    const e = elapsed();
+    if (limit) {
+      const left = Math.max(0, limit - e);
+      $("#hTime").textContent = Math.ceil(left);
+      $("#hBar").style.width = (100 * left / limit) + "%";
+      if (left <= 0) { const r = G.timeout ? G.timeout() : { correct: false, note: "Time ran out" }; r.timedOut = true; answer(r.correct, r); return; }
+    } else if (G.progress) { $("#hBar").style.width = (100 * (1 - G.progress())) + "%"; $("#hTime").textContent = ""; }
+    raf = requestAnimationFrame(tick);
+  }
+  function addTime(s) { limit += s; }
+  function pause() { if (!paused) { paused = true; pauseAt = performance.now(); } }
+  function resume() { if (paused) { tItemStart += performance.now() - pauseAt; paused = false; } }
+  function answer(correct, info = {}) {
+    if (itemDone) return; itemDone = true; cancelAnimationFrame(raf);
+    const used = Math.min(elapsed(), limit || 1e9);
+    results.push({ correct: !!correct, used, level, info });
+    const fb = mode.feedback;
+    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
+    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
+    idx++;
+    setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
+  }
+  function flash(t, cls, ms) {
+    const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
+    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
+  }
+  function key() { return "mmq_hist_" + G.id; }
+  function hist() { try { return JSON.parse(localStorage.getItem(key()) || "[]"); } catch (e) { return []; } }
+  function showHist(sel) {
+    const h = hist(); const el = document.querySelector(sel); if (!el) return;
+    if (!h.length) { el.innerHTML = ""; return; }
+    const best = h.filter(r => r.mode !== "practice").reduce((b, r) => (!b || r.score > b.score || (r.score === b.score && r.time < b.time)) ? r : b, null);
+    el.innerHTML = `<h2 style="font-size:18px;margin-top:18px">Your history</h2>` +
+      (best ? `<div>Best: <b>${best.score}/${best.total}</b> (${best.mode}, ${new Date(best.date).toLocaleDateString()})</div>` : "") +
+      `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
+  }
+  function end() {
+    const n = results.length, c = results.filter(r => r.correct).length;
+    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
+    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
+    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
+    try { const h = hist(); h.push(rec); localStorage.setItem(key(), JSON.stringify(h.slice(-50))); } catch (e) {}
+    $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
+      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
+      <div class="stat">
+        <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
+        <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
+        <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
+        <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
+        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
+        <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
+      </div>
+      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
+      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
+      <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
+      <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
+    $("#again").onclick = () => start(mode.key);
+    $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
+    showHist("#histEnd");
+    show("sEnd");
+    window.__lastResult = rec;
+  }
+  return { init, answer, addTime, pause, resume, flash, rnd, pick, shuffle, get mode() { return mode; }, get done() { return itemDone; } };
+})();
+
+(() => {
+// Word bank (273 pairs) adapted from Ryad2/Gamified_Assessment. Format [word1, word2, S|A|N, difficulty 1-5].
+const BANK = [["thunder","lightning","N",3],["borrow","lend","N",5],["teacher","student","N",4],["doctor","patient","N",4],["question","answer","N",4],["cause","effect","N",5],["lock","key","N",3],["salt","pepper","N",3],["knife","fork","N",3],["sunrise","sunset","A",3],["arrival","departure","A",2],["entrance","exit","A",1],["victory","defeat","A",1],["scarce","abundant","A",2],["hostile","friendly","A",2],["expand","contract","A",2],["inflate","deflate","A",2],["include","exclude","A",2],["accept","reject","A",1],["ancient","old","S",2],["rapid","quick","S",1],["assist","help","S",1],["silent","quiet","S",1],["fragile","delicate","S",2],["obvious","evident","S",2],["difficult","hard","S",1],["purchase","buy","S",1],["begin","start","S",1],["finish","complete","S",2],["envy","jealousy","S",5],["envy","admiration","N",5],["pride","arrogance","N",5],["courage","recklessness","N",5],["cautious","cowardly","N",5],["curious","nosy","N",5],["cheap","inexpensive","S",3],["cheap","frugal","N",5],["frugal","wasteful","A",3],["stingy","generous","A",4],["stingy","frugal","N",5],["simple","plain","N",4],["plain","obvious","N",4],["obscure","unclear","S",4],["obscure","famous","A",5],["novel","book","N",5],["novel","new","S",4],["current","present","S",4],["current","river","N",4],["light","heavy","A",2],["light","bright","N",4],["dark","dim","S",3],["dark","evil","N",5],["fine","excellent","S",4],["fine","penalty","N",4],["minute","tiny","S",4],["minute","hour","N",4],["fair","just","S",4],["fair","pale","N",5],["grave","serious","S",4],["grave","tomb","N",4],["sound","noise","N",4],["sound","healthy","S",4],["mean","cruel","S",4],["mean","average","N",5],["lean","thin","S",4],["lean","support","N",5],["match","contest","S",4],["match","differ","A",4],["cleave","split","S",5],["cleave","adhere","S",5],["sanction","approve","S",5],["sanction","penalty","N",5],["oversight","supervision","S",5],["oversight","mistake","S",5],["screen","display","N",4],["screen","hide","S",5],["temper","anger","N",5],["temper","moderate","S",5],["increase","decrease","A",1],["ascend","descend","A",2],["advance","retreat","A",3],["permit","forbid","A",2],["reveal","conceal","A",2],["temporary","permanent","A",2],["optimistic","pessimistic","A",3],["humble","proud","A",4],["innocent","guilty","A",2],["mandatory","optional","A",3],["transparent","opaque","A",3],["generous","selfish","A",4],["rigid","flexible","A",3],["scarce","plentiful","A",2],["synthetic","natural","A",4],["volatile","stable","A",4],["literal","figurative","A",4],["explicit","implicit","A",3],["public","private","A",2],["domestic","foreign","A",4],["abate","subside","S",5],["perplex","confuse","S",4],["elated","joyful","S",3],["melancholy","sad","S",3],["meticulous","careful","S",4],["hasty","hurried","S",3],["scarcity","shortage","S",3],["reluctant","unwilling","S",3],["vivid","bright","S",4],["dormant","inactive","S",4],["hostile","antagonistic","S",4],["brief","concise","S",4],["ample","plentiful","S",3],["detect","notice","S",3],["obtain","acquire","S",3],["depart","leave","S",2],["retain","keep","S",2],["release","free","S",3],["select","choose","S",2],["construct","build","S",2],["accurate","precise","S",4],["accurate","detailed","N",5],["efficient","effective","N",5],["simple","easy","N",5],["complex","difficult","N",5],["legal","ethical","N",5],["illegal","wrong","N",5],["risk","danger","N",4],["hazard","danger","S",4],["strategy","tactic","N",5],["goal","plan","N",4],["data","evidence","N",5],["proof","evidence","N",5],["belief","knowledge","N",5],["theory","guess","N",5],["symptom","disease","N",4],["medicine","cure","N",4],["map","territory","N",5],["signal","noise","N",5],["memory","history","N",5],["speed","velocity","N",5],["mass","weight","N",5],["climate","weather","N",4],["price","value","N",4],["income","wealth","N",4],["revenue","profit","N",4],["accuracy","validity","N",5],["reliable","valid","N",5],["urgent","important","N",4],["rare","valuable","N",4],["famous","popular","N",4],["anonymous","unknown","S",4],["anonymous","private","N",4],["visible","obvious","N",4],["quiet","peaceful","N",4],["loud","clear","N",4],["clean","pure","N",5],["dirty","polluted","N",4],["sharp","intelligent","S",4],["sharp","pointed","N",4],["blunt","direct","S",4],["blunt","dull","S",4],["dull","boring","S",3],["dull","dim","S",4],["bright","smart","S",4],["bright","shiny","N",4],["cold","distant","S",4],["cold","sick","N",4],["warm","friendly","S",4],["warm","hot","N",3],["cool","calm","S",4],["cool","cold","N",4],["hard","solid","N",4],["soft","gentle","S",3],["soft","weak","N",4],["strong","powerful","S",2],["strong","stubborn","N",4],["weak","fragile","N",4],["fragile","breakable","S",3],["brittle","flexible","A",4],["brittle","fragile","S",4],["elastic","flexible","S",4],["elastic","rubber","N",3],["modern","recent","N",4],["ancient","obsolete","N",4],["obsolete","outdated","S",3],["classic","old","N",4],["original","copy","A",3],["original","creative","S",4],["copy","imitate","S",3],["imitate","mock","N",4],["mock","fake","S",4],["fake","false","S",3],["false","wrong","N",4],["true","accurate","N",4],["honest","truthful","S",2],["honest","legal","N",4],["sincere","honest","S",3],["sincere","polite","N",4],["polite","rude","A",2],["formal","casual","A",3],["casual","careless","N",5],["careful","cautious","S",3],["careful","meticulous","S",4],["careless","reckless","N",5],["reckless","rash","S",4],["rash","quick","N",4],["patient","tolerant","S",3],["patient","doctor","N",4],["impatient","restless","S",3],["restless","active","N",4],["active","energetic","S",3],["active","busy","N",4],["idle","active","A",3],["idle","lazy","N",4],["lazy","industrious","A",4],["busy","occupied","S",3],["busy","crowded","N",4],["crowded","packed","S",3],["dense","crowded","N",4],["dense","stupid","S",5],["stupid","foolish","S",3],["wise","foolish","A",2],["clever","wise","N",4],["clever","smart","S",2],["smart","stylish","S",5],["stylish","fashionable","S",3],["fashionable","popular","N",4],["popular","common","N",4],["common","rare","A",1],["ordinary","common","S",3],["ordinary","inferior","N",4],["inferior","superior","A",2],["minor","major","A",2],["minor","young","N",4],["major","serious","S",4],["serious","grave","S",4],["grave","minor","A",5],["trivial","minor","S",3],["trivial","simple","N",4],["essential","necessary","S",2],["essential","basic","N",4],["optional","unnecessary","N",4],["necessary","unnecessary","A",2],["possible","probable","N",4],["probable","likely","S",2],["possible","impossible","A",1],["certain","doubtful","A",3],["certain","specific","S",5],["specific","general","A",3],["abstract","concrete","A",4],["concrete","cement","N",3],["abstract","summary","N",5],["summary","brief","S",4],["brief","short","S",2],["short","tall","A",2],["short","deficient","S",5],["deficient","adequate","A",4],["adequate","sufficient","S",3],["sufficient","plenty","N",3],["plenty","abundance","S",3],["abundance","excess","N",4],["excess","surplus","S",4],["surplus","shortage","A",3],["shortage","scarcity","S",2],["scarcity","rarity","N",4],["rare","unusual","S",2],["unusual","strange","N",4],["strange","weird","S",3],["weird","wrong","N",4],["normal","usual","S",2],["normal","healthy","N",4],["abnormal","typical","A",3],["typical","representative","S",4],["representative","delegate","N",4]];
+const LAB = { A: "Almost opposite", N: "Other", S: "Almost the same" };
+let it, card, used = new Set(), drag = null;
+function newItem(level) {
+  // Adaptive: prefer pairs whose difficulty is near the current level; never repeat within a run.
+  let pool = BANK.filter((p, i) => !used.has(i) && Math.abs(p[3] - level) <= 1);
+  if (!pool.length) pool = BANK.filter((p, i) => !used.has(i));
+  if (!pool.length) { used.clear(); pool = BANK; }
+  const p = H.pick(pool); used.add(BANK.indexOf(p));
+  return Math.random() < .5 ? p : [p[1], p[0], p[2], p[3]];
+}
+function setup(stage, foot) {
+  stage.innerHTML = `<div class="arrows">
+   <button data-a="A">Almost<br>opposite<div class="tri tl"></div></button>
+   <button data-a="N">Other<div class="tri td"></div></button>
+   <button data-a="S">Almost<br>the same<div class="tri tr"></div></button></div>
+   <div class="card" id="card"><div id="w1"></div><hr><div id="w2"></div></div>`;
+  stage.querySelectorAll("[data-a]").forEach(b => b.onclick = () => choose(b.dataset.a));
+  card = stage.querySelector("#card");
+  card.addEventListener("pointerdown", e => { card.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY }; card.style.transition = "none"; });
+  card.addEventListener("pointermove", e => { if (!drag) return; const dx = e.clientX - drag.x, dy = Math.max(0, e.clientY - drag.y); card.style.transform = `translate(${dx}px,${dy}px) rotate(${dx / 20}deg)`; });
+  const up = e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = null; card.style.transition = "";
+    if (Math.abs(dx) > 60 && Math.abs(dx) > dy) choose(dx < 0 ? "A" : "S"); else if (dy > 60) choose("N"); else card.style.transform = ""; };
+  card.addEventListener("pointerup", up); card.addEventListener("pointercancel", up);
+  foot.innerHTML = `<span style="font-size:13px;opacity:.65;margin-right:auto">Swipe the card, tap an arrow, or use the ← ↓ → keys</span>`;
+}
+function render(p) { it = p; card.style.transition = "none"; card.style.transform = ""; card.style.opacity = 1; card.offsetWidth; card.style.transition = "";
+  document.getElementById("w1").textContent = cap(p[0]); document.getElementById("w2").textContent = cap(p[1]); }
+const cap = s => s[0].toUpperCase() + s.slice(1);
+function choose(a) {
+  if (H.done) return;
+  card.style.transform = a === "A" ? "translate(-140%,0) rotate(-12deg)" : a === "S" ? "translate(140%,0) rotate(12deg)" : "translate(0,140%)"; card.style.opacity = 0;
+  H.answer(a === it[2], { note: `answer: ${LAB[it[2]]}`, picked: a });
+}
+H.init({ id: "swipe", title: "Link Swipe", cat: "Verbal Reasoning", accent: "#8c7a3c", bg: "#f6f5f1", items: 15, perItem: 6, timerText: "6 s per pair",
+  rules: `<p>Compare the two words. Decide whether their meanings are <b>almost the same</b>, <b>almost the opposite</b>, or have some <b>other</b> relationship.</p>
+  <ul><li>Swipe <b>right</b> for almost the same, <b>left</b> for almost opposite, and <b>down</b> for other.</li><li>Related-but-different pairs, like lock / key or teacher / student, count as <b>other</b>.</li>
+  <li>Controls: swipe or drag the card, tap the arrows, or press ← ↓ →.</li></ul>`,
+  setup, newItem, render, onStart: () => used.clear(),
+  timeout: () => ({ correct: false, note: `answer: ${LAB[it[2]]}` }),
+  key: e => { const m = { ArrowLeft: "A", ArrowDown: "N", ArrowRight: "S" }[e.key]; if (m) choose(m); } });
+window.__game = { get item() { return it; }, choose };
+})();
+</script></body></html>

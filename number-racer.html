@@ -1,0 +1,247 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#f7f4f2"><title>Number Racer practice</title>
+<style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
+body{display:flex;justify-content:center;align-items:stretch;overscroll-behavior:none}
+#app{width:100%;max-width:430px;min-height:100%;background:var(--bg,#f7f4f2);display:flex;flex-direction:column;position:relative;box-shadow:0 0 24px rgba(0,0,0,.08)}
+.serif{font-family:Georgia,"Times New Roman",serif}
+h1{font-family:Georgia,serif;font-weight:400;font-size:34px;margin:6px 0 10px;line-height:1.1}
+h2{font-family:Georgia,serif;font-weight:400;font-size:24px;margin:4px 0 8px}
+.cat{display:flex;align-items:center;gap:8px;font-size:14px}.cat i{width:14px;height:14px;background:var(--accent);display:inline-block}
+.pad{padding:18px 18px}
+.screen{display:none;flex:1;flex-direction:column}.screen.on{display:flex}
+.rules{font-size:14.5px;line-height:1.45}.rules li{margin:4px 0}
+.btn{appearance:none;border:1px solid #bdb6b0;background:#fff;border-radius:6px;padding:12px 14px;font-size:16px;cursor:pointer;color:inherit;touch-action:manipulation}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.modes{display:grid;gap:10px;margin-top:10px}
+.modes .btn{text-align:left}.modes small{display:block;opacity:.7;font-size:12.5px;margin-top:2px}
+.hud{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 6px;font-size:15px}
+.hud .ttl{font-family:Georgia,serif}
+.tbar{height:3px;background:#d8d2cd;margin:0 16px}.tbar div{height:100%;background:#3a3030;width:100%}
+#stage{flex:1;display:flex;flex-direction:column;position:relative;touch-action:none;user-select:none;-webkit-user-select:none}
+.foot{border-top:1px solid #d8d2cd;display:flex;justify-content:flex-end;padding:10px 14px;min-height:56px;align-items:center;gap:10px}
+.flash{position:absolute;left:0;right:0;bottom:70px;text-align:center;pointer-events:none;font-size:15px;opacity:0;transition:opacity .15s}
+.flash.on{opacity:1}.flash span{background:#fff;border:1px solid #ccc;padding:8px 12px;border-radius:6px;display:inline-block;max-width:92%}
+.flash.ok span{border-color:#3d8b4a;color:#2c6b37}.flash.bad span{border-color:#b33;color:#9b2a2a}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.stat div{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px}.stat b{display:block;font-size:24px;font-family:Georgia,serif;font-weight:400}
+.stat span{font-size:12.5px;opacity:.7}
+table.rev{width:100%;border-collapse:collapse;font-size:13px}table.rev td{border-bottom:1px solid #e3dedb;padding:5px 3px}
+.ok{color:#2c6b37}.bad{color:#9b2a2a}
+.hist{font-size:13px;opacity:.85}
+a.back{color:inherit;font-size:14px}
+.note{font-size:12px;opacity:.65;margin-top:10px}
+
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.ctl{flex:1;font-size:26px;padding:14px 0;user-select:none;-webkit-user-select:none;touch-action:none}
+</style></head><body><div id="app"></div><script>// Shared harness: screens, per-item timer, adaptive staircase, scoring, localStorage history.
+const H = (() => {
+  const $ = s => document.querySelector(s);
+  let G, mode, idx, level, results, tStart, tItemStart, limit, raf, itemDone, paused = false, pauseAt = 0, runStart;
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  const MODES = g => ({
+    test: { label: "Official-style test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
+    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 easy questions with feedback after each answer" },
+    hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
+  });
+  function init(game) {
+    G = game;
+    document.title = G.title + " practice";
+    document.documentElement.style.setProperty("--accent", G.accent);
+    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
+    const ms = MODES(G);
+    $("#app").innerHTML = `
+    <section class="screen on" id="sIntro"><div class="pad">
+      <a class="back" href="index.html">&larr; All games</a>
+      <div style="height:24px"></div>
+      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
+      <div class="rules">${G.rules}</div>
+      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
+      <div class="hist" id="histIntro"></div>
+      <div class="note">Unofficial practice mock. Item content is generated, not the real item bank.</div>
+    </div></section>
+    <section class="screen" id="sGame">
+      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
+      <div class="tbar"><div id="hBar"></div></div>
+      <div id="stage"></div>
+      <div class="flash" id="flash"><span></span></div>
+      <div class="foot" id="foot"></div>
+    </section>
+    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
+    document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
+    showHist("#histIntro");
+    G.setup($("#stage"), $("#foot"));
+    window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && !itemDone && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
+  }
+  function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
+  function start(m) {
+    mode = Object.assign({ key: m }, MODES(G)[m]); idx = 0; level = mode.start; results = []; runStart = performance.now();
+    $("#hTot").textContent = mode.n; $("#hMode").textContent = m === "practice" ? "Practice" : m === "hard" ? "Hard drill" : G.title;
+    if (G.onStart) G.onStart(mode);
+    show("sGame"); next();
+  }
+  function next() {
+    if (idx >= mode.n) return end();
+    $("#hNum").textContent = idx + 1; itemDone = false; paused = false;
+    const item = G.newItem(level);
+    G.render(item);
+    tItemStart = performance.now();
+    limit = G.perItem ? G.perItem * mode.timer * (G.timeFactor ? G.timeFactor(item) : 1) : 0;
+    cancelAnimationFrame(raf); tick();
+  }
+  function elapsed() { return ((paused ? pauseAt : performance.now()) - tItemStart) / 1000; }
+  function tick() {
+    if (itemDone) return;
+    const e = elapsed();
+    if (limit) {
+      const left = Math.max(0, limit - e);
+      $("#hTime").textContent = Math.ceil(left);
+      $("#hBar").style.width = (100 * left / limit) + "%";
+      if (left <= 0) { const r = G.timeout ? G.timeout() : { correct: false, note: "Time ran out" }; r.timedOut = true; answer(r.correct, r); return; }
+    } else if (G.progress) { $("#hBar").style.width = (100 * (1 - G.progress())) + "%"; $("#hTime").textContent = ""; }
+    raf = requestAnimationFrame(tick);
+  }
+  function addTime(s) { limit += s; }
+  function pause() { if (!paused) { paused = true; pauseAt = performance.now(); } }
+  function resume() { if (paused) { tItemStart += performance.now() - pauseAt; paused = false; } }
+  function answer(correct, info = {}) {
+    if (itemDone) return; itemDone = true; cancelAnimationFrame(raf);
+    const used = Math.min(elapsed(), limit || 1e9);
+    results.push({ correct: !!correct, used, level, info });
+    const fb = mode.feedback;
+    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
+    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
+    idx++;
+    setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
+  }
+  function flash(t, cls, ms) {
+    const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
+    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
+  }
+  function key() { return "mmq_hist_" + G.id; }
+  function hist() { try { return JSON.parse(localStorage.getItem(key()) || "[]"); } catch (e) { return []; } }
+  function showHist(sel) {
+    const h = hist(); const el = document.querySelector(sel); if (!el) return;
+    if (!h.length) { el.innerHTML = ""; return; }
+    const best = h.filter(r => r.mode !== "practice").reduce((b, r) => (!b || r.score > b.score || (r.score === b.score && r.time < b.time)) ? r : b, null);
+    el.innerHTML = `<h2 style="font-size:18px;margin-top:18px">Your history</h2>` +
+      (best ? `<div>Best: <b>${best.score}/${best.total}</b> (${best.mode}, ${new Date(best.date).toLocaleDateString()})</div>` : "") +
+      `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
+  }
+  function end() {
+    const n = results.length, c = results.filter(r => r.correct).length;
+    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
+    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
+    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
+    try { const h = hist(); h.push(rec); localStorage.setItem(key(), JSON.stringify(h.slice(-50))); } catch (e) {}
+    $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
+      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
+      <div class="stat">
+        <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
+        <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
+        <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
+        <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
+        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
+        <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
+      </div>
+      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
+      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
+      <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
+      <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
+    $("#again").onclick = () => start(mode.key);
+    $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
+    showHist("#histEnd");
+    show("sEnd");
+    window.__lastResult = rec;
+  }
+  return { init, answer, addTime, pause, resume, flash, rnd, pick, shuffle, get mode() { return mode; }, get done() { return itemDone; } };
+})();
+
+(() => {
+const W = 360, HH = 560, L = 54, R = 306, BS = 34, CW = 40, CARY = HH - 50;
+let it, cv, ctx, raf, last, keys = { l: 0, r: 0 }, t0;
+function newItem(level) {
+  const n = [5, 6, 6, 7, 8][level - 1], neg = level >= 2, mag = [6, 7, 9, 9, 12][level - 1];
+  for (;;) {
+    const nums = Array.from({ length: n }, () => { let v = H.rnd(1, mag); if (neg && Math.random() < .18 + .06 * level) v = -v; return v; });
+    const k = H.rnd(2, Math.min(n - 2, 2 + Math.floor(level / 2)));
+    const idx = H.shuffle([...nums.keys()]).slice(0, k);
+    const target = idx.reduce((s, i) => s + nums[i], 0);
+    if (target === 0 || Math.abs(target) > 25) continue;
+    if (nums.reduce((s, v) => s + v, 0) === target) continue; // catching everything must not be a solution
+    return { nums, target, sol: idx.sort((a, b) => a - b), fallT: (2.0 - .15 * level) * (H.mode ? H.mode.timer : 1), plan: 5 };
+  }
+}
+function setup(stage, foot) {
+  stage.innerHTML = `<div style="flex:1;position:relative"><canvas id="cv"></canvas></div>`;
+  foot.innerHTML = `<button class="btn ctl" id="bl">&#9664;</button><button class="btn ctl" id="br">&#9654;</button>`;
+  cv = stage.querySelector("#cv"); ctx = cv.getContext("2d");
+  const hold = (el, k) => { el.addEventListener("pointerdown", e => { e.preventDefault(); keys[k] = 1; el.setPointerCapture(e.pointerId); });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach(ev => el.addEventListener(ev, () => keys[k] = 0)); };
+  hold(foot.querySelector("#bl"), "l"); hold(foot.querySelector("#br"), "r");
+  // Touch/hold on left or right half of the track also steers.
+  cv.addEventListener("pointerdown", e => { const b = cv.getBoundingClientRect(); const k = e.clientX < b.left + b.width / 2 ? "l" : "r"; keys[k] = 1; cv.setPointerCapture(e.pointerId); cv._k = k; });
+  ["pointerup", "pointercancel"].forEach(ev => cv.addEventListener(ev, () => { if (cv._k) keys[cv._k] = 0; cv._k = null; }));
+  window.addEventListener("keyup", e => { if (e.key === "ArrowLeft") keys.l = 0; if (e.key === "ArrowRight") keys.r = 0; });
+  window.addEventListener("resize", fit);
+}
+function fit() { const p = cv.parentElement, s = Math.min(p.clientWidth / W, p.clientHeight / HH) || 1, dpr = window.devicePixelRatio || 1;
+  cv.style.width = W * s + "px"; cv.style.height = HH * s + "px"; cv.style.margin = "0 auto"; cv.width = W * s * dpr; cv.height = HH * s * dpr; ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0); }
+function render(item) {
+  it = item; it.car = (L + R) / 2; it.t = 0; it.i = -1; it.got = []; it.block = null; it.done = false; keys.l = keys.r = 0;
+  it.total = it.plan + it.nums.length * it.fallT;
+  fit(); cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
+}
+function block(x, y, v, c) { ctx.fillStyle = c || (v < 0 ? "#3b2b2c" : "#a35f5f"); ctx.fillRect(x - BS / 2, y - BS / 2, BS, BS); ctx.fillStyle = "#fff"; ctx.font = "17px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(v, x, y + 1); }
+function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (H.done && !it.done) return;
+  it.t += dt;
+  const sp = 330; it.car = Math.max(L + CW / 2, Math.min(R - CW / 2, it.car + (keys.r - keys.l) * sp * dt));
+  if (it.t >= it.plan) {
+    const k = Math.floor((it.t - it.plan) / it.fallT);
+    if (k !== it.i && k < it.nums.length) { it.i = k; it.block = { v: it.nums[k], x: H.rnd(L + BS / 2 + 2, R - BS / 2 - 2), hit: false }; }
+    if (it.block && !it.block.hit) {
+      const f = ((it.t - it.plan) % it.fallT) / it.fallT; it.block.y = -BS + f * (CARY + BS);
+      if (it.block.y + BS / 2 >= CARY - 22 && it.block.y - BS / 2 <= CARY + 10 && Math.abs(it.block.x - it.car) < (BS + CW) / 2 - 4) { it.block.hit = true; it.got.push(it.i); }
+    }
+    if (it.t - it.plan >= it.nums.length * it.fallT) return finish();
+  }
+  drawScene(); raf = requestAnimationFrame(loop);
+}
+function drawScene() {
+  ctx.clearRect(0, 0, W, HH); ctx.fillStyle = "#f8f5f3"; ctx.fillRect(0, 0, W, HH);
+  ctx.strokeStyle = "#d4cdca"; ctx.beginPath(); ctx.moveTo(L, 0); ctx.lineTo(L, HH); ctx.moveTo(R, 0); ctx.lineTo(R, HH); ctx.stroke();
+  // Queue (left): numbers still to fall, the next one at the bottom.
+  const rest = it.nums.map((v, i) => [v, i]).filter(([, i]) => i > it.i);
+  rest.slice().reverse().forEach(([v], j) => block(L / 2, 26 + j * 42, v));
+  // Target and collected (right).
+  ctx.strokeStyle = "#8f3b3b"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc((R + W) / 2, 28, 17, 0, 7); ctx.stroke();
+  [[0,-1],[0,1],[-1,0],[1,0]].forEach(([a,b]) => { ctx.beginPath(); ctx.moveTo((R + W) / 2 + a * 17, 28 + b * 17); ctx.lineTo((R + W) / 2 + a * 22, 28 + b * 22); ctx.stroke(); });
+  ctx.fillStyle = "#8f3b3b"; ctx.font = "bold 15px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(it.target, (R + W) / 2, 29); ctx.lineWidth = 1;
+  it.got.forEach((i, j) => block((R + W) / 2, 76 + j * 42, it.nums[i]));
+  if (it.t < it.plan) { ctx.fillStyle = "#3a3030"; ctx.font = "15px system-ui"; ctx.fillText(`First number falls in ${Math.ceil(it.plan - it.t)}`, (L + R) / 2, 40);
+    ctx.fillStyle = "#3a3030"; ctx.fillRect(L + 20, 56, (R - L - 40) * (1 - it.t / it.plan), 2); }
+  if (it.block && !it.block.hit) block(it.block.x, it.block.y, it.block.v);
+  ctx.fillStyle = "#3a2b2c"; ctx.beginPath(); ctx.moveTo(it.car, CARY - 30); ctx.lineTo(it.car + CW / 2, CARY + 14); ctx.lineTo(it.car, CARY + 2); ctx.lineTo(it.car - CW / 2, CARY + 14); ctx.closePath(); ctx.fill();
+}
+function finish() {
+  it.done = true; it.block = null; drawScene();
+  const s = it.got.reduce((a, i) => a + it.nums[i], 0);
+  H.answer(s === it.target, { note: `you collected ${it.got.length ? it.got.map(i => it.nums[i]).join(" + ") + " = " + s : "nothing"}; one solution: ${it.sol.map(i => it.nums[i]).join(" + ")} = ${it.target}` });
+}
+H.init({ id: "racer", title: "Number Racer", cat: "Numerical Reasoning", accent: "#8f3b3b", items: 12, perItem: 0, timerText: "5 s planning + about 9–10 s of falling numbers per round",
+  rules: `<p>Collect the falling numbers that add up to <b>exactly the target</b> (the number in the crosshair, top right). Avoid the rest.</p>
+  <ul><li>Every number you collect is added to your total. The round ends once all the numbers have fallen.</li><li>There may be more than one way to reach the target. Negative numbers subtract.</li>
+  <li>You get 5 seconds at the start of each round to plan. The queue on the left falls from the bottom up, and the numbers you've collected stack up on the right.</li>
+  <li>Controls: hold the ◀ ▶ buttons, hold the left or right half of the track, or hold the ← → keys. You collect a number by touching its block.</li></ul>`,
+  setup, newItem, render, progress: () => it ? Math.min(1, it.t / it.total) : 0,
+  key: e => { if (e.key === "ArrowLeft") keys.l = 1; else if (e.key === "ArrowRight") keys.r = 1; } });
+window.__game = { get item() { return it; }, keys };
+})();
+</script></body></html>

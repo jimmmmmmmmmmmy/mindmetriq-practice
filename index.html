@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MindmetriQ practice games</title>
+<style>
+body{margin:0;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a;display:flex;justify-content:center}
+main{max-width:520px;width:100%;background:#f7f4f2;min-height:100vh;padding:22px 18px}
+h1{font-family:Georgia,serif;font-weight:400;font-size:30px;margin:0 0 6px}
+p{font-size:14.5px;line-height:1.45}
+a.g{display:block;background:#fff;border:1px solid #ddd;border-left:6px solid var(--c);border-radius:6px;padding:12px 14px;margin:10px 0;color:inherit;text-decoration:none}
+a.g b{font-family:Georgia,serif;font-weight:400;font-size:20px}a.g small{display:block;opacity:.7;margin-top:3px}
+a.g .best{float:right;font-size:13px;opacity:.8}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;opacity:.6;margin:20px 0 4px}
+.note{font-size:12px;opacity:.65}
+</style></head><body><main>
+<h1>MindmetriQ practice</h1>
+<p>Browser remakes of the six Test Partnership MindmetriQ games, made for practice. Each game has an official-style test, a 3-question practice round with feedback, and a harder drill. Your scores are saved in this browser.</p>
+<h2>Numerical</h2>
+<a class="g" style="--c:#8f4b4b" href="net-the-numbers.html" data-id="net"><span class="best"></span><b>Net the Numbers</b><small>12 questions · 20 s each · drag the net to the highest sum</small></a>
+<a class="g" style="--c:#8f3b3b" href="number-racer.html" data-id="racer"><span class="best"></span><b>Number Racer</b><small>12 rounds · 5 s to plan · catch the numbers that sum to the target</small></a>
+<h2>Verbal</h2>
+<a class="g" style="--c:#8c7a3c" href="link-swipe.html" data-id="swipe"><span class="best"></span><b>Link Swipe</b><small>15 pairs · 6 s each · same, opposite, or other</small></a>
+<a class="g" style="--c:#6e5020" href="word-logic.html" data-id="wordlogic"><span class="best"></span><b>Word Logic</b><small>15 analogies · 15 s each · three +10 s boosts</small></a>
+<h2>Logical</h2>
+<a class="g" style="--c:#4e7590" href="pipe-puzzle.html" data-id="pipes"><span class="best"></span><b>Pipe Puzzle</b><small>10 puzzles · 20 s each · swap pipes to join the ends</small></a>
+<a class="g" style="--c:#3e4b57" href="shape-spinner.html" data-id="spinner"><span class="best"></span><b>Shape Spinner</b><small>10 wheels · 12 s each · same shape or same shading, not both</small></a>
+<p class="note">Unofficial practice remakes. Not affiliated with or endorsed by Test Partnership. All items are generated or written for this mock, and the scoring is a simple correct count, not the real Rasch/adaptive norm scoring.</p>
+<script>
+document.querySelectorAll("a.g").forEach(a => { try { const h = JSON.parse(localStorage.getItem("mmq_hist_" + a.dataset.id) || "[]").filter(r => r.mode !== "practice");
+  if (h.length) { const b = h.reduce((x, r) => r.score > x.score ? r : x); a.querySelector(".best").textContent = `best ${b.score}/${b.total} · ${h.length} run${h.length > 1 ? "s" : ""}`; } } catch (e) {} });
+</script></main></body></html>

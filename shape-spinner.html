@@ -1,0 +1,224 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#f7f4f2"><title>Shape Spinner practice</title>
+<style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
+body{display:flex;justify-content:center;align-items:stretch;overscroll-behavior:none}
+#app{width:100%;max-width:430px;min-height:100%;background:var(--bg,#f7f4f2);display:flex;flex-direction:column;position:relative;box-shadow:0 0 24px rgba(0,0,0,.08)}
+.serif{font-family:Georgia,"Times New Roman",serif}
+h1{font-family:Georgia,serif;font-weight:400;font-size:34px;margin:6px 0 10px;line-height:1.1}
+h2{font-family:Georgia,serif;font-weight:400;font-size:24px;margin:4px 0 8px}
+.cat{display:flex;align-items:center;gap:8px;font-size:14px}.cat i{width:14px;height:14px;background:var(--accent);display:inline-block}
+.pad{padding:18px 18px}
+.screen{display:none;flex:1;flex-direction:column}.screen.on{display:flex}
+.rules{font-size:14.5px;line-height:1.45}.rules li{margin:4px 0}
+.btn{appearance:none;border:1px solid #bdb6b0;background:#fff;border-radius:6px;padding:12px 14px;font-size:16px;cursor:pointer;color:inherit;touch-action:manipulation}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.modes{display:grid;gap:10px;margin-top:10px}
+.modes .btn{text-align:left}.modes small{display:block;opacity:.7;font-size:12.5px;margin-top:2px}
+.hud{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 6px;font-size:15px}
+.hud .ttl{font-family:Georgia,serif}
+.tbar{height:3px;background:#d8d2cd;margin:0 16px}.tbar div{height:100%;background:#3a3030;width:100%}
+#stage{flex:1;display:flex;flex-direction:column;position:relative;touch-action:none;user-select:none;-webkit-user-select:none}
+.foot{border-top:1px solid #d8d2cd;display:flex;justify-content:flex-end;padding:10px 14px;min-height:56px;align-items:center;gap:10px}
+.flash{position:absolute;left:0;right:0;bottom:70px;text-align:center;pointer-events:none;font-size:15px;opacity:0;transition:opacity .15s}
+.flash.on{opacity:1}.flash span{background:#fff;border:1px solid #ccc;padding:8px 12px;border-radius:6px;display:inline-block;max-width:92%}
+.flash.ok span{border-color:#3d8b4a;color:#2c6b37}.flash.bad span{border-color:#b33;color:#9b2a2a}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.stat div{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px}.stat b{display:block;font-size:24px;font-family:Georgia,serif;font-weight:400}
+.stat span{font-size:12.5px;opacity:.7}
+table.rev{width:100%;border-collapse:collapse;font-size:13px}table.rev td{border-bottom:1px solid #e3dedb;padding:5px 3px}
+.ok{color:#2c6b37}.bad{color:#9b2a2a}
+.hist{font-size:13px;opacity:.85}
+a.back{color:inherit;font-size:14px}
+.note{font-size:12px;opacity:.65;margin-top:10px}
+
+svg{display:block;margin:auto;width:min(100%,58vh);touch-action:none}
+.wheel{cursor:grab}
+</style></head><body><div id="app"></div><script>// Shared harness: screens, per-item timer, adaptive staircase, scoring, localStorage history.
+const H = (() => {
+  const $ = s => document.querySelector(s);
+  let G, mode, idx, level, results, tStart, tItemStart, limit, raf, itemDone, paused = false, pauseAt = 0, runStart;
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  const MODES = g => ({
+    test: { label: "Official-style test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
+    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 easy questions with feedback after each answer" },
+    hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
+  });
+  function init(game) {
+    G = game;
+    document.title = G.title + " practice";
+    document.documentElement.style.setProperty("--accent", G.accent);
+    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
+    const ms = MODES(G);
+    $("#app").innerHTML = `
+    <section class="screen on" id="sIntro"><div class="pad">
+      <a class="back" href="index.html">&larr; All games</a>
+      <div style="height:24px"></div>
+      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
+      <div class="rules">${G.rules}</div>
+      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
+      <div class="hist" id="histIntro"></div>
+      <div class="note">Unofficial practice mock. Item content is generated, not the real item bank.</div>
+    </div></section>
+    <section class="screen" id="sGame">
+      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
+      <div class="tbar"><div id="hBar"></div></div>
+      <div id="stage"></div>
+      <div class="flash" id="flash"><span></span></div>
+      <div class="foot" id="foot"></div>
+    </section>
+    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
+    document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
+    showHist("#histIntro");
+    G.setup($("#stage"), $("#foot"));
+    window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && !itemDone && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
+  }
+  function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
+  function start(m) {
+    mode = Object.assign({ key: m }, MODES(G)[m]); idx = 0; level = mode.start; results = []; runStart = performance.now();
+    $("#hTot").textContent = mode.n; $("#hMode").textContent = m === "practice" ? "Practice" : m === "hard" ? "Hard drill" : G.title;
+    if (G.onStart) G.onStart(mode);
+    show("sGame"); next();
+  }
+  function next() {
+    if (idx >= mode.n) return end();
+    $("#hNum").textContent = idx + 1; itemDone = false; paused = false;
+    const item = G.newItem(level);
+    G.render(item);
+    tItemStart = performance.now();
+    limit = G.perItem ? G.perItem * mode.timer * (G.timeFactor ? G.timeFactor(item) : 1) : 0;
+    cancelAnimationFrame(raf); tick();
+  }
+  function elapsed() { return ((paused ? pauseAt : performance.now()) - tItemStart) / 1000; }
+  function tick() {
+    if (itemDone) return;
+    const e = elapsed();
+    if (limit) {
+      const left = Math.max(0, limit - e);
+      $("#hTime").textContent = Math.ceil(left);
+      $("#hBar").style.width = (100 * left / limit) + "%";
+      if (left <= 0) { const r = G.timeout ? G.timeout() : { correct: false, note: "Time ran out" }; r.timedOut = true; answer(r.correct, r); return; }
+    } else if (G.progress) { $("#hBar").style.width = (100 * (1 - G.progress())) + "%"; $("#hTime").textContent = ""; }
+    raf = requestAnimationFrame(tick);
+  }
+  function addTime(s) { limit += s; }
+  function pause() { if (!paused) { paused = true; pauseAt = performance.now(); } }
+  function resume() { if (paused) { tItemStart += performance.now() - pauseAt; paused = false; } }
+  function answer(correct, info = {}) {
+    if (itemDone) return; itemDone = true; cancelAnimationFrame(raf);
+    const used = Math.min(elapsed(), limit || 1e9);
+    results.push({ correct: !!correct, used, level, info });
+    const fb = mode.feedback;
+    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
+    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
+    idx++;
+    setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
+  }
+  function flash(t, cls, ms) {
+    const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
+    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
+  }
+  function key() { return "mmq_hist_" + G.id; }
+  function hist() { try { return JSON.parse(localStorage.getItem(key()) || "[]"); } catch (e) { return []; } }
+  function showHist(sel) {
+    const h = hist(); const el = document.querySelector(sel); if (!el) return;
+    if (!h.length) { el.innerHTML = ""; return; }
+    const best = h.filter(r => r.mode !== "practice").reduce((b, r) => (!b || r.score > b.score || (r.score === b.score && r.time < b.time)) ? r : b, null);
+    el.innerHTML = `<h2 style="font-size:18px;margin-top:18px">Your history</h2>` +
+      (best ? `<div>Best: <b>${best.score}/${best.total}</b> (${best.mode}, ${new Date(best.date).toLocaleDateString()})</div>` : "") +
+      `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
+  }
+  function end() {
+    const n = results.length, c = results.filter(r => r.correct).length;
+    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
+    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
+    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
+    try { const h = hist(); h.push(rec); localStorage.setItem(key(), JSON.stringify(h.slice(-50))); } catch (e) {}
+    $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
+      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
+      <div class="stat">
+        <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
+        <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
+        <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
+        <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
+        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
+        <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
+      </div>
+      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
+      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
+      <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
+      <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
+    $("#again").onclick = () => start(mode.key);
+    $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
+    showHist("#histEnd");
+    show("sEnd");
+    window.__lastResult = rec;
+  }
+  return { init, answer, addTime, pause, resume, flash, rnd, pick, shuffle, get mode() { return mode; }, get done() { return itemDone; } };
+})();
+
+(() => {
+const FILL = { d: "#2f3437", w: "#ffffff", g: "#9aa3ab" };
+let it, rot = 0, ang = 0, drag = null, svg, wheelG;
+const step = () => 360 / it.n;
+function shapesFor(level) { return level >= 4 ? ["c", "s", "t", "r"] : ["c", "s", "t"]; }
+function fillsFor(level) { return level >= 5 ? ["d", "w", "g"] : ["d", "w"]; }
+const ok = (a, b) => (a.s === b.s) !== (a.f === b.f); // same shape XOR same shading
+function valid(inner, outer, r) { const n = inner.length; for (let i = 0; i < n; i++) if (!ok(outer[i], inner[((i - r) % n + n) % n])) return false; return true; }
+function newItem(level) {
+  const n = [3, 4, 5, 6, H.rnd(7, 8)][level - 1], S = shapesFor(level), F = fillsFor(level);
+  for (;;) {
+    const inner = Array.from({ length: n }, () => ({ s: H.pick(S), f: H.pick(F) }));
+    const sol = H.rnd(1, n - 1);
+    const outer = Array.from({ length: n }, (_, i) => { const m = inner[((i - sol) % n + n) % n]; const c = []; S.forEach(s => F.forEach(f => { const o = { s, f }; if (ok(o, m)) c.push(o); })); return H.pick(c); });
+    let cnt = 0; for (let r = 0; r < n; r++) if (valid(inner, outer, r)) cnt++;
+    if (cnt === 1) return { n, inner, outer, sol };
+  }
+}
+function sym(o, x, y, rotDeg, size = 22) {
+  const st = `fill="${FILL[o.f]}" stroke="${o.f === "w" ? "#aab" : FILL[o.f]}" stroke-width="2"`;
+  const t = `transform="translate(${x},${y}) rotate(${rotDeg})"`;
+  if (o.s === "c") return `<circle cx="${x}" cy="${y}" r="${size * .8}" ${st}/>`;
+  if (o.s === "s") return `<rect x="${-size * .75}" y="${-size * .75}" width="${size * 1.5}" height="${size * 1.5}" ${st} ${t}/>`;
+  if (o.s === "r") return `<rect x="${-size * .65}" y="${-size * .65}" width="${size * 1.3}" height="${size * 1.3}" ${st} transform="translate(${x},${y}) rotate(${rotDeg + 45})"/>`;
+  return `<polygon points="0,${size} ${-size * .95},${-size * .7} ${size * .95},${-size * .7}" ${st} ${t}/>`; // triangle; tip points toward the centre
+}
+const pol = (deg, r) => [r * Math.sin(deg * Math.PI / 180), -r * Math.cos(deg * Math.PI / 180)];
+function draw() {
+  const n = it.n, s = step(), R = n > 6 ? 150 : 145, rIn = n > 6 ? 92 : 82, size = n > 6 ? 16 : 20;
+  let o = ""; it.outer.forEach((q, i) => { const a = i * s, [x, y] = pol(a, R + 30); o += sym(q, x, y, a, size); });
+  let w = `<circle r="${R - 12}" fill="#d7dee5" stroke="#b9c3cc" stroke-width="2"/>`;
+  it.inner.forEach((q, j) => { const a = j * s, [x, y] = pol(a, rIn); w += sym(q, x, y, a + 180, size); });
+  document.getElementById("outer").innerHTML = o; wheelG.innerHTML = w; setAng();
+}
+function setAng() { wheelG.setAttribute("transform", `rotate(${ang})`); }
+function snap() { rot = ((Math.round(ang / step()) % it.n) + it.n) % it.n; ang = Math.round(ang / step()) * step(); setAng(); }
+function turn(d) { if (H.done) return; ang += d * step(); snap(); }
+function setup(stage, foot) {
+  stage.innerHTML = `<div style="flex:1;display:flex;align-items:center;padding:8px"><svg id="svg" viewBox="-210 -210 420 420"><g id="outer"></g><g id="wheel" class="wheel"></g></svg></div>`;
+  foot.innerHTML = `<button class="btn" id="l" aria-label="rotate left">&larr;</button><button class="btn" id="r" aria-label="rotate right">&rarr;</button><span style="flex:1"></span><button class="btn primary" id="submit">Submit &rarr;</button>`;
+  svg = stage.querySelector("#svg"); wheelG = stage.querySelector("#wheel");
+  foot.querySelector("#l").onclick = () => turn(-1); foot.querySelector("#r").onclick = () => turn(1); foot.querySelector("#submit").onclick = submit;
+  const angOf = e => { const b = svg.getBoundingClientRect(); return Math.atan2(e.clientX - (b.left + b.width / 2), -(e.clientY - (b.top + b.height / 2))) * 180 / Math.PI; };
+  svg.addEventListener("pointerdown", e => { if (H.done) return; svg.setPointerCapture(e.pointerId); drag = { a0: angOf(e), g0: ang }; });
+  svg.addEventListener("pointermove", e => { if (!drag) return; let d = angOf(e) - drag.a0; ang = drag.g0 + d; setAng(); });
+  const up = () => { if (!drag) return; drag = null; snap(); }; svg.addEventListener("pointerup", up); svg.addEventListener("pointercancel", up);
+}
+function render(item) { it = item; ang = 0; rot = 0; draw(); }
+function result() { const c = valid(it.inner, it.outer, rot); return { correct: c, note: `the correct position was ${it.sol} step(s) clockwise from the start` }; }
+function submit() { if (H.done) return; const r = result(); if (H.mode.feedback && !r.correct) { ang = it.sol * step(); rot = it.sol; setAng(); } H.answer(r.correct, r); }
+H.init({ id: "spinner", title: "Shape Spinner", cat: "Logical Reasoning", accent: "#3e4b57", bg: "#eef1f4", items: 10, perItem: 12, timerText: "12 s per question",
+  rules: `<p>Rotate the inner wheel to find the <b>one</b> position where every inner shape sits next to an outer shape that has <b>either the same shape or the same shading, but not both</b>.</p>
+  <ul><li>Same shape and same shading: incorrect. Different shape and different shading: also incorrect.</li><li>Check every pair before you submit.</li>
+  <li>Harder levels add more positions, a diamond shape, and a grey shading.</li>
+  <li>Controls: drag the wheel round, or tap the ← → buttons or press the ← → keys. Tap <b>Submit</b> or press Enter. When time runs out, the current position is submitted.</li></ul>`,
+  setup, newItem, render, timeout: () => result(),
+  key: e => { if (e.key === "ArrowLeft") turn(-1); else if (e.key === "ArrowRight") turn(1); else if (e.key === "Enter" || e.key === " ") submit(); } });
+window.__game = { get item() { return it; }, get rot() { return rot; }, turn, submit };
+})();
+</script></body></html>
