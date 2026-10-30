@@ -42,7 +42,7 @@ a.back{color:inherit;font-size:14px}
 .td{border-left:24px solid transparent;border-right:24px solid transparent;border-top:30px solid #cdbf8a;margin-top:18px}
 .card{margin:26px 18px 0;background:#fff;border:1px solid #ddd;box-shadow:0 3px 8px rgba(0,0,0,.08);text-align:center;font-family:Georgia,serif;font-size:26px;padding:4px 16px;touch-action:none;cursor:grab;transition:transform .18s,opacity .18s}
 .card div{padding:16px 0}.card hr{border:0;border-top:1px solid #8a7f72;margin:0 10px}
-</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const verbal = MMQVerbal.create();
@@ -76,6 +76,7 @@ H.init({ id: "swipe", title: "Link Swipe", cat: "Verbal Reasoning", accent: "#8c
   rules: `<p>Compare the two words. Decide whether their meanings are <b>almost the same</b>, <b>almost the opposite</b>, or have some <b>other</b> relationship.</p>
   <ul><li>Swipe <b>right</b> for almost the same, <b>left</b> for almost opposite, and <b>down</b> for other.</li><li>Related-but-different pairs, like lock / key or teacher / student, count as <b>other</b>.</li>
   <li>Controls: swipe or drag the card, tap the arrows, or press ← ↓ →.</li></ul>`,
+  snapshot: info => ({ words: it.slice(0,2), answer: it[2], picked: info.picked || null }),
   setup, newItem, render, onStart: () => verbal.reset(),
   timeout: () => ({ correct: false, note: `answer: ${LAB[it[2]]}` }),
   key: e => { const m = { ArrowLeft: "A", ArrowDown: "N", ArrowRight: "S" }[e.key]; if (m) choose(m); } });

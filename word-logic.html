@@ -41,7 +41,7 @@ a.back{color:inherit;font-size:14px}
 .boosts{display:flex;justify-content:space-between;padding:18px 16px 4px}
 .boost{background:#efe6c4;border:1px solid #c9bd8d;padding:8px 16px;font-size:14px;cursor:pointer;border-radius:2px}
 .boost:disabled{opacity:.3;cursor:default}
-</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const verbal = MMQVerbal.create();
@@ -65,6 +65,7 @@ H.init({ id: "wordlogic", title: "Word Logic", cat: "Verbal Reasoning", accent: 
   <ul><li>First work out how the first pair of words is related, for example <i>Up</i> and <i>Down</i> are opposites. Then pick the word that relates to the third word the same way: <i>Left</i> → <b>Right</b>.</li>
   <li>You can add 10 seconds to your timer at any point, but only <b>3 times across the whole test</b>.</li>
   <li>Controls: tap a word. On a keyboard, use ↑ ↓ to highlight and Enter to answer. The Space bar adds 10 seconds.</li></ul>`,
+  snapshot: info => ({ b: it.b, opts: it.opts, selected: info.timedOut ? -1 : sel, relation: it.relation }),
   setup, newItem, render, onStart: () => { verbal.reset(); boostsLeft = 3; },
   timeout: () => { if (H.mode.feedback) draw(true); return { correct: false, note: "answer: " + it.b[4] + " (" + it.relation + ")" }; },
   key: e => { if (e.key === "ArrowDown") { sel = (sel + 1) % 5; draw(); } else if (e.key === "ArrowUp") { sel = sel < 0 ? 4 : (sel + 4) % 5; draw(); } else if (e.key === "Enter") submit(); else if (e.key === " ") boost(); } });
