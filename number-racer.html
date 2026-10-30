@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f7f4f2"><title>Number Racer practice</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
@@ -36,15 +36,15 @@ a.back{color:inherit;font-size:14px}
 
 canvas{display:block;width:100%;height:100%;touch-action:none}
 .ctl{flex:1;font-size:26px;padding:14px 0;user-select:none;-webkit-user-select:none;touch-action:none}
-</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"><link rel="stylesheet" href="css/game.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/demo.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
-const W = 360, HH = 560, L = 54, R = 306, BS = 34, CW = 40, CARY = HH - 50;
+const {width:W,height:HH,left:L,right:R,blockSize:BS,carWidth:CW,carY:CARY} = MMQLogic.racer.geometry;
 let it, cv, ctx, raf, keys = { l: 0, r: 0 };
 const newItem = level => MMQLogic.racer.newItem(level, H.mode.timer);
 function setup(stage, foot) {
-  stage.innerHTML = `<div style="flex:1;position:relative"><canvas id="cv"></canvas></div>`;
-  foot.innerHTML = `<button class="btn ctl" id="bl">&#9664;</button><button class="btn ctl" id="br">&#9654;</button>`;
+  stage.innerHTML = `<div style="flex:1;position:relative"><canvas id="cv" tabindex="0" role="img" aria-label="Number Racer track. Use left and right arrow keys to steer."></canvas><div id="racerStatus" class="sr-only" role="status" aria-live="polite"></div></div>`;
+  foot.innerHTML = `<button class="btn ctl" id="bl" aria-label="Move left">&#9665;</button><button class="btn ctl" id="br" aria-label="Move right">&#9655;</button>`;
   cv = stage.querySelector("#cv"); ctx = cv.getContext("2d");
   const hold = (el, k) => { el.addEventListener("pointerdown", e => { e.preventDefault(); if (H.done) return; keys[k] = 1; el.setPointerCapture(e.pointerId); });
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(ev => el.addEventListener(ev, () => keys[k] = 0)); };
@@ -63,7 +63,7 @@ function render(item) {
   it.total = it.plan + it.nums.length * it.fallT;
   fit(); cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
 }
-function block(x, y, v, c) { ctx.fillStyle = c || (v < 0 ? "#3b2b2c" : "#a35f5f"); ctx.fillRect(x - BS / 2, y - BS / 2, BS, BS); ctx.fillStyle = "#fff"; ctx.font = "17px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(v, x, y + 1); }
+function block(x, y, v, c) { ctx.fillStyle = c || (v < 0 ? "#3b2b2c" : "#a35f5f"); ctx.fillRect(x - BS / 2, y - BS / 2, BS, BS); ctx.fillStyle = "#fff"; ctx.font = "32px Quicksand, system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(v, x, y + 1); }
 function loop() {
   if (H.done) return;
   if (MMQLogic.racer.advance(it, H.elapsed(), keys)) return finish();
@@ -71,20 +71,23 @@ function loop() {
 }
 function stop() { cancelAnimationFrame(raf); keys.l = keys.r = 0; }
 function drawScene() {
-  ctx.clearRect(0, 0, W, HH); ctx.fillStyle = "#f8f5f3"; ctx.fillRect(0, 0, W, HH);
+  ctx.clearRect(0, 0, W, HH); ctx.fillStyle = "#f9f5f5"; ctx.fillRect(0, 0, W, HH);
   ctx.strokeStyle = "#d4cdca"; ctx.beginPath(); ctx.moveTo(L, 0); ctx.lineTo(L, HH); ctx.moveTo(R, 0); ctx.lineTo(R, HH); ctx.stroke();
   // Queue (left): numbers still to fall, the next one at the bottom.
   const rest = it.nums.map((v, i) => [v, i]).filter(([, i]) => i > it.i);
-  rest.slice().reverse().forEach(([v], j) => block(L / 2, 26 + j * 42, v));
+  rest.slice().reverse().forEach(([v], j) => block(L / 2, 37.5 + j * 75, v));
   // Target and collected (right).
-  ctx.strokeStyle = "#8f3b3b"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc((R + W) / 2, 28, 17, 0, 7); ctx.stroke();
-  [[0,-1],[0,1],[-1,0],[1,0]].forEach(([a,b]) => { ctx.beginPath(); ctx.moveTo((R + W) / 2 + a * 17, 28 + b * 17); ctx.lineTo((R + W) / 2 + a * 22, 28 + b * 22); ctx.stroke(); });
-  ctx.fillStyle = "#8f3b3b"; ctx.font = "bold 15px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(it.target, (R + W) / 2, 29); ctx.lineWidth = 1;
-  it.got.forEach((i, j) => block((R + W) / 2, 76 + j * 42, it.nums[i]));
-  if (it.t < it.plan) { ctx.fillStyle = "#3a3030"; ctx.font = "15px system-ui"; ctx.fillText(`First number falls in ${Math.ceil(it.plan - it.t)}`, (L + R) / 2, 40);
+  ctx.strokeStyle = "#8f3b3b"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc((R + W) / 2, 37.5, 25, 0, 7); ctx.stroke();
+  [[0,-1],[0,1],[-1,0],[1,0]].forEach(([a,b]) => { ctx.beginPath(); ctx.moveTo((R + W) / 2 + a * 25, 37.5 + b * 25); ctx.lineTo((R + W) / 2 + a * 30, 37.5 + b * 30); ctx.stroke(); });
+  ctx.fillStyle = "#8f3b3b"; ctx.font = "24px Quicksand, system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(it.target, (R + W) / 2, 37.5); ctx.lineWidth = 1;
+  const collectedGap = Math.min(75,(HH-110-BS/2)/Math.max(1,it.got.length-1));
+  it.got.forEach((i, j) => block((R + W) / 2, 110 + j * collectedGap, it.nums[i]));
+  if (it.t < it.plan) { ctx.fillStyle = "#3a3030"; ctx.font = "22px Quicksand, system-ui"; ctx.fillText(`First number falls in ${Math.ceil(it.plan - it.t)}`, (L + R) / 2, 40);
     ctx.fillStyle = "#3a3030"; ctx.fillRect(L + 20, 56, (R - L - 40) * (1 - it.t / it.plan), 2); }
+  const state = `Target ${it.target}. ${it.t < it.plan ? 'Planning. Falling order: '+it.nums.join(', ') : it.block && !it.block.hit ? 'Falling '+it.block.v : 'Between numbers'}. Collected: ${it.got.map(i=>it.nums[i]).join(', ') || 'none'}.`;
+  const status = document.getElementById("racerStatus"); if(status.textContent !== state) status.textContent = state;
   if (it.block && !it.block.hit) block(it.block.x, it.block.y, it.block.v);
-  ctx.fillStyle = "#3a2b2c"; ctx.beginPath(); ctx.moveTo(it.car, CARY - 30); ctx.lineTo(it.car + CW / 2, CARY + 14); ctx.lineTo(it.car, CARY + 2); ctx.lineTo(it.car - CW / 2, CARY + 14); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#3a2b2c"; ctx.beginPath(); ctx.moveTo(it.car, CARY - 44); ctx.lineTo(it.car + CW / 2, CARY + 32); ctx.lineTo(it.car, CARY + 8); ctx.lineTo(it.car - CW / 2, CARY + 32); ctx.closePath(); ctx.fill();
 }
 function result() {
   it.done = true; it.block = null; it.t = it.total; it.i = it.nums.length - 1; drawScene();
@@ -92,7 +95,7 @@ function result() {
   return { correct: s === it.target, note: `you collected ${it.got.length ? it.got.map(i => it.nums[i]).join(" + ") + " = " + s : "nothing"}; one solution: ${it.sol.map(i => it.nums[i]).join(" + ")} = ${it.target}` };
 }
 function finish() { const r = result(); H.answer(r.correct, r); }
-H.init({ id: "racer", title: "Number Racer", cat: "Numerical Reasoning", accent: "#8f3b3b", items: 12, perItem: 0, itemLimit: item => item.plan + item.nums.length * item.fallT, timerText: "5 s planning + about 9–10 s of falling numbers per round",
+H.init({ id: "racer", title: "Number Racer", cat: "Numerical Reasoning", accent: "#8f3b3b", items: 12, perItem: 0, itemLimit: item => item.plan + item.nums.length * item.fallT, timerText: "5 s planning + 13 s falling per round",
   rules: `<p>Collect the falling numbers that add up to <b>exactly the target</b> (the number in the crosshair, top right). Avoid the rest.</p>
   <ul><li>Every number you collect is added to your total. The round ends once all the numbers have fallen.</li><li>There may be more than one way to reach the target. Negative numbers subtract.</li>
   <li>In the timed test you get 5 seconds to plan. Hard drill reduces planning and falling time by 25%. The queue on the left falls from the bottom up, and the numbers you've collected stack up on the right.</li>

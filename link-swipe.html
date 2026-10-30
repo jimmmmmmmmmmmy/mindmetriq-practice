@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f7f4f2"><title>Link Swipe practice</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
@@ -42,7 +42,7 @@ a.back{color:inherit;font-size:14px}
 .td{border-left:24px solid transparent;border-right:24px solid transparent;border-top:30px solid #cdbf8a;margin-top:18px}
 .card{margin:26px 18px 0;background:#fff;border:1px solid #ddd;box-shadow:0 3px 8px rgba(0,0,0,.08);text-align:center;font-family:Georgia,serif;font-size:26px;padding:4px 16px;touch-action:none;cursor:grab;transition:transform .18s,opacity .18s}
 .card div{padding:16px 0}.card hr{border:0;border-top:1px solid #8a7f72;margin:0 10px}
-</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"><link rel="stylesheet" href="css/game.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/demo.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const verbal = MMQVerbal.create();
@@ -54,13 +54,14 @@ function setup(stage, foot) {
    <button data-a="A">Almost<br>opposite<div class="tri tl"></div></button>
    <button data-a="N">Other<div class="tri td"></div></button>
    <button data-a="S">Almost<br>the same<div class="tri tr"></div></button></div>
-   <div class="card" id="card"><div id="w1"></div><hr><div id="w2"></div></div>`;
+   <div class="card" id="card" tabindex="0" role="group" aria-label="Word pair. Left for opposite, down for other, right for similar."><div id="w1"></div><hr><div id="w2"></div></div>`;
   stage.querySelectorAll("[data-a]").forEach(b => b.onclick = () => choose(b.dataset.a));
   card = stage.querySelector("#card");
   card.addEventListener("pointerdown", e => { if (H.done) return; card.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY }; card.style.transition = "none"; });
   card.addEventListener("pointermove", e => { if (H.done || !drag) return; const dx = e.clientX - drag.x, dy = Math.max(0, e.clientY - drag.y); card.style.transform = `translate(${dx}px,${dy}px) rotate(${dx / 20}deg)`; });
   const up = e => { if (H.done || !drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = null; card.style.transition = "";
-    if (Math.abs(dx) > 60 && Math.abs(dx) > dy) choose(dx < 0 ? "A" : "S"); else if (dy > 60) choose("N"); else card.style.transform = ""; };
+    const threshold = document.getElementById("app").clientWidth / 3;
+    if (Math.abs(dx) > threshold && Math.abs(dx) > dy) choose(dx < 0 ? "A" : "S"); else if (dy > threshold) choose("N"); else card.style.transform = ""; };
   card.addEventListener("pointerup", up); card.addEventListener("pointercancel", () => { drag = null; card.style.transform = ""; });
   foot.innerHTML = `<span style="font-size:13px;opacity:.65;margin-right:auto">Swipe the card, tap an arrow, or use the ← ↓ → keys</span>`;
 }
@@ -72,7 +73,7 @@ function choose(a) {
   card.style.transform = a === "A" ? "translate(-140%,0) rotate(-12deg)" : a === "S" ? "translate(140%,0) rotate(12deg)" : "translate(0,140%)"; card.style.opacity = 0;
   H.answer(a === it[2], { note: `answer: ${LAB[it[2]]}`, picked: a });
 }
-H.init({ id: "swipe", title: "Link Swipe", cat: "Verbal Reasoning", accent: "#8c7a3c", bg: "#f6f5f1", items: 15, perItem: 6, timerText: "6 s per pair",
+H.init({ id: "swipe", title: "Link Swipe", cat: "Verbal Reasoning", accent: "#8c7a3c", bg: "#f6f5f1", items: 15, practiceItems: 4, perItem: 6, timerText: "6 s per pair",
   rules: `<p>Compare the two words. Decide whether their meanings are <b>almost the same</b>, <b>almost the opposite</b>, or have some <b>other</b> relationship.</p>
   <ul><li>Swipe <b>right</b> for almost the same, <b>left</b> for almost opposite, and <b>down</b> for other.</li><li>Related-but-different pairs, like lock / key or teacher / student, count as <b>other</b>.</li>
   <li>Controls: swipe or drag the card, tap the arrows, or press ← ↓ →.</li></ul>`,

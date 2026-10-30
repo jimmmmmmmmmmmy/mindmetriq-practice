@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f7f4f2"><title>Word Logic practice</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
@@ -41,32 +41,33 @@ a.back{color:inherit;font-size:14px}
 .boosts{display:flex;justify-content:space-between;padding:18px 16px 4px}
 .boost{background:#efe6c4;border:1px solid #c9bd8d;padding:8px 16px;font-size:14px;cursor:pointer;border-radius:2px}
 .boost:disabled{opacity:.3;cursor:default}
-</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"><link rel="stylesheet" href="css/game.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/demo.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const verbal = MMQVerbal.create();
+const cap = word => word[0].toUpperCase() + word.slice(1);
 let it, sel = -1, boostsLeft = 3, optEls, boostEls;
 const newItem = level => verbal.analogy(level);
 function setup(stage, foot) {
-  stage.innerHTML = `<div class="q" id="q"></div><div class="opts" id="opts">${[0,1,2,3,4].map(i => `<div class="opt" data-i="${i}"></div>`).join("")}</div>
+  stage.innerHTML = `<div class="q" id="q"></div><div class="opts" id="opts">${[0,1,2,3,4].map(i => `<button type="button" class="opt" data-i="${i}"></button>`).join("")}</div>
   <div class="boosts">${[0,1,2].map(i => `<button class="boost" data-b="${i}">+10s</button>`).join("")}</div>`;
   optEls = [...stage.querySelectorAll(".opt")]; boostEls = [...stage.querySelectorAll(".boost")];
   optEls.forEach(o => o.onclick = () => { if (H.done) return; sel = +o.dataset.i; draw(); submit(); });
   boostEls.forEach(b => b.onclick = boost);
-  foot.innerHTML = `<span style="font-size:13px;opacity:.65;margin-right:auto">Tap a word · keys: ↑ ↓ Enter · Space = +10s</span>`;
+  foot.innerHTML = `<span class="boost-hint" id="boostHint"></span>`;
 }
-function boost() { if (H.done || boostsLeft <= 0 || !H.addTime(10)) return; boostsLeft--; drawBoosts(); H.flash("+10 seconds", "ok", 700); }
-function drawBoosts() { boostEls.forEach((b, i) => b.disabled = i >= boostsLeft); }
-function draw(reveal) { optEls.forEach((o, i) => { o.textContent = it.opts[i]; o.className = "opt" + (i === sel ? " sel" : "") + (reveal && it.opts[i] === it.b[4] ? " right" : ""); }); }
-function render(item) { it = item; sel = -1; document.getElementById("q").textContent = `${it.b[1]} is to ${it.b[2]} as ${it.b[3]} is to`; draw(); drawBoosts(); }
+function boost() { if (H.done || boostsLeft <= 0 || H.remaining > 13 * H.mode.timer || !H.addTime(10)) return; boostsLeft--; drawBoosts(); H.flash("+10 seconds", "ok", 700); }
+function drawBoosts() { const ready = !H.done && H.remaining <= 13 * H.mode.timer; boostEls.forEach((b, i) => { b.disabled = i >= boostsLeft || !ready; b.setAttribute("aria-label",`Add 10 seconds. ${boostsLeft} boosts left.`); }); }
+function draw(reveal) { optEls.forEach((o, i) => { o.textContent = cap(it.opts[i]); o.setAttribute("aria-pressed",String(i===sel)); o.className = "opt" + (i === sel ? " sel" : "") + (reveal && it.opts[i] === it.b[4] ? " right" : ""); }); }
+function render(item) { it = item; sel = -1; document.getElementById("q").textContent = `${cap(it.b[1])} is to ${cap(it.b[2])} as ${cap(it.b[3])} is to`; draw(); drawBoosts(); document.getElementById("boostHint").textContent = `↑ ↓ Enter to answer · Space to boost. Boosts unlock at ${Number((13*H.mode.timer).toFixed(2))}s remaining.`; }
 function submit() { if (H.done || sel < 0) return; const ok = it.opts[sel] === it.b[4]; if (H.mode.feedback) draw(true); H.answer(ok, { note: "answer: " + it.b[4] + " (" + it.relation + ")" }); }
 H.init({ id: "wordlogic", title: "Word Logic", cat: "Verbal Reasoning", accent: "#6e5020", bg: "#f5f5f2", items: 15, perItem: 15, timerText: "15 s per question + three +10 s boosts",
   rules: `<p>Select the word that best completes the logical comparison.</p>
   <ul><li>First work out how the first pair of words is related, for example <i>Up</i> and <i>Down</i> are opposites. Then pick the word that relates to the third word the same way: <i>Left</i> → <b>Right</b>.</li>
-  <li>You can add 10 seconds to your timer at any point, but only <b>3 times across the whole test</b>.</li>
+  <li>You can add 10 seconds to your timer once 13 seconds or less remain, but only <b>3 times across the whole test</b>.</li>
   <li>Controls: tap a word. On a keyboard, use ↑ ↓ to highlight and Enter to answer. The Space bar adds 10 seconds.</li></ul>`,
   snapshot: info => ({ b: it.b, opts: it.opts, selected: info.timedOut ? -1 : sel, relation: it.relation }),
-  setup, newItem, render, onStart: () => { verbal.reset(); boostsLeft = 3; },
+  setup, newItem, render, onTick: drawBoosts, stop: drawBoosts, onStart: () => { verbal.reset(); boostsLeft = 3; },
   timeout: () => { if (H.mode.feedback) draw(true); return { correct: false, note: "answer: " + it.b[4] + " (" + it.relation + ")" }; },
   key: e => { if (e.key === "ArrowDown") { sel = (sel + 1) % 5; draw(); } else if (e.key === "ArrowUp") { sel = sel < 0 ? 4 : (sel + 4) % 5; draw(); } else if (e.key === "Enter") submit(); else if (e.key === " ") boost(); } });
 if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, pick(word) { sel = it.opts.indexOf(word); draw(); submit(); }, boost, get boostsLeft() { return boostsLeft; } };

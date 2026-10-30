@@ -1,43 +1,56 @@
 // Shared run lifecycle, deadlines, adaptive difficulty and scoring.
 const H = (() => {
   const $ = s => document.querySelector(s);
-  let G, mode, idx, level, results, tItemStart, limit = 0, raf, itemDone = true, nextTimer, runStart, itemLevel, expiring = false;
+  let G, mode, idx, level, results, tItemStart, limit = 0, raf, itemDone = true, nextTimer, runStart, itemLevel, helpPage = 0, currentItem, retrying = false, expiring = false;
   const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
   const MODES = g => ({
     test: { label: "Timed test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
-    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 questions with feedback after each answer" },
+    practice: { label: "Practice round", n: g.practiceItems || 3, timer: 1, start: 1, feedback: true, desc: `${g.practiceItems || 3} questions with feedback after each answer` },
     hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
   });
   function init(game) {
     G = game;
+    document.body.className = "game-" + G.id;
     document.title = G.title + " practice";
     document.documentElement.style.setProperty("--accent", G.accent);
-    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
+    document.documentElement.style.setProperty("--bg", {net:"#f9f5f5",racer:"#f9f5f5",swipe:"#f5f7f3",wordlogic:"#f5f7f3",pipes:"#eaf0f3",spinner:"#eaf0f3"}[G.id]);
     const ms = MODES(G);
     $("#app").innerHTML = `
     <section class="screen on" id="sIntro"><div class="pad">
       <a class="back" href="index.html">&larr; All games</a>
-      <div style="height:24px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
-      <div class="rules">${G.rules}</div>
-      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
+      <div class="intro-hero">${MMQDemo.art(G.id)}<div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><p class="language-note">English practice</p></div>
+      <button class="btn intro-instructions" id="instructions">Instructions <span aria-hidden="true">→</span></button>
+      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "practice" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
+      <details class="rules intro-rules"><summary>Quick rules</summary>${G.rules}</details>
       <div class="hist" id="histIntro"></div>
       <div class="note">Unofficial practice mock. Fresh puzzles and curated word relationships. Timings and scores are for this practice app.</div>
     </div></section>
+    <section class="screen" id="sHelp" aria-label="Game instructions"></section>
     <section class="screen" id="sGame">
-      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
-      <div class="tbar"><div id="hBar"></div></div>
+      <div class="game-header"><div class="tbar"><div id="hBar"></div></div><div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
+      </div><div id="gameAnnouncements" class="sr-only" role="status" aria-live="polite"></div>
       <div id="stage"></div>
       <div class="flash" id="flash"><span></span></div>
-      <div class="foot" id="foot"></div>
+      <div class="foot" id="foot"></div><div class="foot practice-actions" id="practiceActions" hidden></div>
     </section>
     <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
     document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
+    $("#instructions").onclick = () => { helpPage = 0; help(); };
     showHist("#histIntro");
     G.setup($("#stage"), $("#foot"));
     window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && accepting() && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
   }
   function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
+  function help() {
+    const pages = MMQDemo.pages[G.id], [title,text,kind] = pages[helpPage];
+    const duration = G.id === "racer" ? "5s + falling" : G.perItem + " seconds";
+    const illustration = kind === "keys" ? `<div class="tutorial-keys">${(G.id === "wordlogic" ? ["↑","↓","Enter","Space"] : G.id === "racer" || G.id === "spinner" ? ["←","→","Enter"] : ["←","↑","↓","→","Enter"]).map(k=>`<kbd>${k}</kbd>`).join("")}</div>` : kind === "duration" ? `<div class="tutorial-duration"><div><b>${G.practiceItems || 3}</b><small>Practice questions</small></div><div><b>${duration}</b><small>Per question</small></div></div>` : `<div class="tutorial-illustration">${MMQDemo.example(G.id,helpPage)}</div>`;
+    $("#sHelp").innerHTML = `<div class="tutorial-head"><button class="btn" id="closeHelp">← Menu</button><span>${helpPage+1} of ${pages.length}</span></div><div class="tutorial-body"><h1 tabindex="-1" id="helpTitle">${title}</h1><p>${text}</p>${illustration}</div><div class="tutorial-nav"><button class="btn" id="helpBack" ${helpPage ? "" : "disabled"}>← Back</button><button class="btn primary" id="helpNext">${helpPage===pages.length-1 ? "Start practice →" : "Next →"}</button></div>`;
+    $("#closeHelp").onclick = () => show("sIntro");
+    $("#helpBack").onclick = () => { if(helpPage) { helpPage--; help(); } };
+    $("#helpNext").onclick = () => { if(helpPage===pages.length-1) start("practice"); else { helpPage++; help(); } };
+    show("sHelp"); $("#helpTitle").focus({preventScroll:true});
+  }
   function start(m) {
     clearTimeout(nextTimer); cancelAnimationFrame(raf);
     if (G.stop) G.stop();
@@ -56,10 +69,13 @@ const H = (() => {
       $("#endBody").innerHTML = '<h2>Puzzle generation failed</h2><p>Your run was not saved. Please start a fresh run.</p><button class="btn" id="retry">Back to menu</button>';
       $("#retry").onclick = () => show("sIntro"); show("sEnd"); return;
     }
+    currentItem = structuredClone(item); retrying = false;
     itemLevel = item.level || level;
     limit = G.itemLimit ? G.itemLimit(item) : G.perItem * mode.timer;
     tItemStart = performance.now(); itemDone = false;
+    $("#practiceActions").hidden = true; $("#foot").hidden = false; clearTimeout($("#flash")._t); $("#flash").className = "flash";
     G.render(item);
+    $("#gameAnnouncements").textContent = `Question ${idx+1} of ${mode.n}. Level ${itemLevel}. ${G.id === "racer" ? "Five seconds to plan the target sum." : Math.round(limit)+" seconds."}`;
     cancelAnimationFrame(raf); tick();
   }
   function elapsed() { return (performance.now() - tItemStart) / 1000; }
@@ -82,9 +98,11 @@ const H = (() => {
     if (limit) {
       const left = Math.max(0, limit - e);
       $("#hTime").textContent = Math.ceil(left);
-      $("#hBar").style.width = (100 * left / limit) + "%";
+      $("#hBar").style.width = (100 * Math.min(1,e / limit)) + "%";
       if (left <= 0) { expire(); return; }
     }
+    if (G.submitDelay) $("#submit").disabled = e < G.submitDelay * mode.timer;
+    if (G.onTick) G.onTick();
     raf = requestAnimationFrame(tick);
   }
   function addTime(s) { if (!accepting() || !Number.isFinite(s) || s <= 0) return false; limit += s; return true; }
@@ -98,16 +116,31 @@ const H = (() => {
     if (G.stop) G.stop();
     const used = Math.min(elapsed(), limit || 1e9);
     const snapshot = structuredClone(G.snapshot(info));
-    results.push({ correct: !!correct, used, level: itemLevel, info: { ...info }, snapshot });
+    if (!retrying) results.push({ correct: !!correct, used, level: itemLevel, info: { ...info }, snapshot });
+    else results.at(-1).info.retryCount = (results.at(-1).info.retryCount || 0) + 1;
     const fb = mode.feedback;
-    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
-    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
-    idx++;
-    nextTimer = setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
+    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? 0 : 450);
+    if (!retrying) { level = Math.max(1, Math.min(5, level + (correct ? 1 : -1))); idx++; }
+    if (fb) {
+      $("#foot").hidden = true; $("#practiceActions").hidden = false;
+      $("#practiceActions").innerHTML = '<button class="btn" id="retryQuestion">Retry</button><button class="btn primary" id="nextQuestion">Continue →</button><small>Practice score uses first attempts. Retries are for learning.</small>';
+      $("#nextQuestion").onclick = next;
+      $("#retryQuestion").onclick = replay;
+      $("#gameAnnouncements").textContent = `${correct ? "Correct" : "Incorrect"}. Practice feedback. Retry this puzzle or continue.`;
+    } else nextTimer = setTimeout(next, 500 + (info.delay || 0));
+  }
+  function replay() {
+    retrying = true; itemDone = false;
+    const item = structuredClone(currentItem);
+    limit = G.itemLimit ? G.itemLimit(item) : G.perItem * mode.timer;
+    tItemStart = performance.now();
+    $("#practiceActions").hidden = true; $("#foot").hidden = false;
+    clearTimeout($("#flash")._t); $("#flash").className = "flash";
+    G.render(item); cancelAnimationFrame(raf); tick();
   }
   function flash(t, cls, ms) {
     const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
-    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
+    clearTimeout(f._t); if(ms > 0) f._t = setTimeout(() => f.className = "flash", ms);
   }
   function hist() { return MMQHistory.read(G.id); }
   function showHist(sel) {
@@ -126,6 +159,7 @@ const H = (() => {
     MMQHistory.save(G.id, rec);
     $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
       <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
+      ${mode.feedback ? '<p class="note">Practice scores and answer reviews record your first attempt on each puzzle. Retries do not add points.</p>' : ""}
       <div class="stat">
         <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
         <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
@@ -162,5 +196,5 @@ const H = (() => {
     show("sEnd");
     window.__lastResult = rec;
   }
-  return { init, answer, addTime, elapsed, flash, get mode() { return mode; }, get done() { return !accepting(); } };
+  return { init, answer, addTime, elapsed, flash, get mode() { return mode; }, get done() { return !accepting(); }, get canSubmit() { return accepting() && elapsed() >= (G.submitDelay || 0) * mode.timer; }, get remaining() { return Math.max(0,limit-elapsed()); } };
 })();

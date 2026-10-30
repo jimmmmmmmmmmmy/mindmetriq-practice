@@ -7,13 +7,13 @@ These are unofficial personal-practice remakes, unaffiliated with Test Partnersh
 | Game | Timed-test items | Practice-app timing | Rule |
 |---|---:|---|---|
 | Net the Numbers | 12 | 20 s per question | Move a fixed net to the highest sum, including negative totals. |
-| Number Racer | 12 | 5 s planning, then 9.25–10.2 s falling | Catch a subset that adds to the exact target; avoid the rest. |
+| Number Racer | 12 | 5 s planning, then 13 s falling (8 numbers) | Catch a subset that adds to the exact target; avoid the rest. |
 | Link Swipe | 15 | 6 s per pair | Same meaning, opposite meaning, or another relationship. |
 | Word Logic | 15 | 15 s per question; three +10 s boosts per run | Complete an analogy using the same relationship. |
 | Pipe Puzzle | 10 | 20 s per puzzle | Swap movable tiles to connect the fixed ends; no rotation. |
 | Shape Spinner | 10 | 12 s per wheel | Every pair must share shape XOR shading. |
 
-Every game also has a three-item practice run with feedback and a hard drill with 25% less time. Racer hard drill reduces both planning and falling time. Correct answers raise the next requested level; wrong answers lower it, within levels 1–5. The result table records the actual selected difficulty. Best timed-test scores exclude practice and hard drill.
+Practice has three questions in each game except Link Swipe, which has four pairs. Every game also has practice feedback and a hard drill with 25% less time. Racer hard drill reduces both planning and falling time. Correct answers raise the next requested level; wrong answers lower it, within levels 1–5. The result table records the actual selected difficulty. Best timed-test scores exclude practice and hard drill.
 
 ## How rounds work
 
@@ -22,6 +22,23 @@ Every game also has a three-item practice run with feedback and a hard drill wit
 `js/verbal-data.js` contains curated word relationships. `js/verbal-logic.js` composes analogies by combining two examples of the same relationship, then draws distinct distractors and shuffles the options. Link Swipe draws balanced categories and randomly orders each pair. A run never repeats an unordered word pair or the same two analogy examples. Word relationships are curated rather than inferred from random words; difficulty is approximate, not psychometrically calibrated.
 
 `js/harness.js` owns the run, deadline, score, and transition to the next item. Inputs check the deadline before changing the puzzle, and each item can score only once. Net and spinner submit the current position at timeout; racer checks the caught sum; unanswered verbal and pipe items fail. Dropped frames do not extend racer time or award catches for long unseen intervals. `js/storage.js` validates saved records and tolerates blocked, full, or corrupt storage.
+
+## Public demo compatibility
+
+All six public demo pages use the same canvas bootstrap and JavaScript engine. We inspected the publicly served HTML/CSS/JavaScript and walked through the instruction and practice screens on 30 October 2026. The interface here is independently written, with generated items and accessible HTML/SVG controls. The portrait frame, typography, header, progress bar, tile geometry, controls and guide lengths follow those observations. Quicksand and Hedvig Letters Serif are self-hosted from Google Fonts, with their SIL Open Font Licenses included in `fonts/`.
+
+| Public demo | Verified behavior reproduced here |
+|---|---|
+| [Net the Numbers](https://www.tptests.com/Candidate/MindmetriqDemo?lang=English&name=NetTheNumbers) | 20-second timer; first-second Submit guard; five guide pages. |
+| [Number Racer](https://www.tptests.com/Candidate/MindmetriqDemo?lang=English&name=NumberRacer) | Five-second planning phase, eight numbers, 1.625-second drops, matching track and player dimensions. |
+| [Link Swipe](https://www.tptests.com/Candidate/MindmetriqDemo?lang=English&name=LinkSwipe) | Four practice pairs; six-second timer; proportional swipe threshold; six guide pages. |
+| [Word Logic](https://www.tptests.com/Candidate/MindmetriqDemo?lang=English&name=WordLogic) | 15-second timer; three +10-second boosts; boosts require 13 seconds or less remaining. A boost therefore cannot be stacked immediately. |
+| [Pipe Puzzle](https://www.tptests.com/Candidate/MindmetriqDemo?lang=English&name=PipePuzzle) | Only blue pipes swap. Grey tiles are fixed obstacles. Pipe ends are fixed, and a completed route submits automatically. |
+| [Shape Spinner](https://www.tptests.com/Candidate/MindmetriqDemo?lang=English&name=ShapeSpinner) | 12-second timer; first-second Submit guard; inner-wheel dragging and five guide pages. |
+
+The public Racer instructions print a 14-second duration, but the observed eight-drop practice sequence lasts about 18 seconds including planning. This app uses that observed sequence. Hard drill is our own variation: all base timings and the Word Logic boost-unlock threshold are scaled by 0.75. Practice feedback waits for **Retry** or **Continue**, and retries replay the same generated puzzle. Results and adaptive tier changes use only the first attempt; retry answers do not increase the score or replace its answer-review snapshot. Full tests advance automatically.
+
+The public demo provides client behavior and examples. Our authored difficulty tiers, generated question distribution and practice scores remain separate from the publisher's calibrated assessment. No publisher scripts, sprites, example question bank, or reference screenshots are deployed. Practice content is English.
 
 ## Answer reviews and feedback
 

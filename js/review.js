@@ -119,7 +119,7 @@
   function list(id,results) {
     const firstMiss=results.findIndex(r=>!r.correct);
     return results.map((r,i)=>`<details class="answer-review" id="review-${i}" ${(i === (firstMiss<0?0:firstMiss))?'open':''}>
-      <summary><span class="review-summary-title">Question ${i+1} <span class="${r.correct?'ok':'bad'}">${escape(status(id,r))}</span></span><span class="review-meta">Level ${r.level} · ${r.used.toFixed(1)}s</span></summary>
+      <summary><span class="review-summary-title">Question ${i+1} <span class="${r.correct?'ok':'bad'}">${escape(status(id,r))}</span></span><span class="review-meta">Level ${r.level} · ${r.used.toFixed(1)}s${r.info.retryCount ? ` · ${r.info.retryCount} retr${r.info.retryCount===1?"y":"ies"}` : ""}</span></summary>
       <div class="review-content"><div class="review-toggle" role="group" aria-label="Question ${i+1} answer view">
       <button type="button" data-review="${i}" data-view="submitted" aria-pressed="false">Your answer</button><button type="button" data-review="${i}" data-view="solution" aria-pressed="true">${id==='pipes' || id==='racer' ? 'One valid solution' : 'Correct answer'}</button></div>
       <p class="review-view-label">${id==='pipes' || id==='racer' ? 'One valid solution' : 'Correct answer'} · highlighted in green</p>
