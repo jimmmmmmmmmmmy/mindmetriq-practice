@@ -38,7 +38,7 @@ All six public demo pages use the same canvas bootstrap and JavaScript engine. W
 
 The public Racer instructions print a 14-second duration, but the observed eight-drop practice sequence lasts about 18 seconds including planning. This app uses that observed sequence. Hard drill is our own variation: all base timings and the Word Logic boost-unlock threshold are scaled by 0.75. Practice feedback waits for **Retry** or **Continue**, and retries replay the same generated puzzle. Results and adaptive tier changes use only the first attempt; retry answers do not increase the score or replace its answer-review snapshot. Full tests advance automatically.
 
-The public demo provides client behavior and examples. Our authored difficulty tiers, generated question distribution and practice scores remain separate from the publisher's calibrated assessment. No publisher scripts, sprites, example question bank, or reference screenshots are deployed. Practice content is English.
+The public demo provides client behavior and examples. Our authored difficulty tiers, generated question distribution and practice scores remain separate from the publisher's calibrated assessment. No publisher scripts, sprites, example question bank, or reference screenshots are deployed. Practice content is English. Static asset URLs use a release tag so Pages caching cannot combine an old controller with new game markup; update the tag when changing the shared runtime interface.
 
 ## Answer reviews and feedback
 
