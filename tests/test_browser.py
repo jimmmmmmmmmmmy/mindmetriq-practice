@@ -329,6 +329,100 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(self.page.evaluate('JSON.stringify(__game.item.cells)'), after)
         self.assertFalse(self.page.evaluate('H.answer(true)'))
 
+    def pipe_cursor(self):
+        return self.page.locator('#pg .pc[tabindex="0"]')
+
+    def move_pipe_cursor(self, destination):
+        n = self.page.evaluate('__game.item.N')
+        current = int(self.pipe_cursor().get_attribute('data-i'))
+        dy, dx = destination // n - current // n, destination % n - current % n
+        for _ in range(abs(dy)):
+            self.page.keyboard.press('ArrowDown' if dy > 0 else 'ArrowUp')
+        for _ in range(abs(dx)):
+            self.page.keyboard.press('ArrowRight' if dx > 0 else 'ArrowLeft')
+        self.assertEqual(self.pipe_cursor().get_attribute('data-i'), str(destination))
+        self.assertTrue(self.pipe_cursor().evaluate('(e)=>e===document.activeElement'))
+
+    def test_pipe_keyboard_cursor_reaches_every_tile_including_fixed_squares(self):
+        for n in [5, 6]:
+            with self.subTest(size=n):
+                self.start('pipe-puzzle', 'hard' if n == 6 else 'practice')
+                if n == 6:
+                    self.correct('pipe-puzzle'); self.advance(900)
+                self.assertEqual(self.page.evaluate('__game.item.N'), n)
+                self.assertEqual(self.page.locator('#pg [role=row]').count(), n)
+                original = self.page.evaluate('JSON.stringify(__game.item.cells)')
+                seen_types = set()
+                for y in range(n):
+                    for x in (range(n) if y % 2 == 0 else range(n-1, -1, -1)):
+                        i = y*n+x
+                        self.move_pipe_cursor(i)
+                        # Also exercise a boundary key when no movement is possible.
+                        if i == 0:
+                            self.page.keyboard.press('ArrowUp')
+                            self.page.keyboard.press('ArrowLeft')
+                        cell = self.pipe_cursor()
+                        self.assertEqual(cell.get_attribute('data-i'), str(i))
+                        self.assertEqual(self.page.locator('#pg .pc.cur').get_attribute('data-i'), str(i))
+                        self.assertTrue(cell.evaluate('''e => {
+                          const visible = s => (parseFloat(s.outlineWidth)>0 && s.outlineStyle!=='none') || s.boxShadow!=='none';
+                          const base = getComputedStyle(e);
+                          const overlay = getComputedStyle(e,'::after');
+                          return visible(base) || (overlay.content!=='none' && parseFloat(overlay.borderTopWidth)>0 && overlay.borderTopStyle!=='none');
+                        }'''), 'A cursor must remain visible on every tile type')
+                        tile_type = self.page.evaluate(f'__game.item.cells[{i}].t')
+                        seen_types.add(tile_type)
+                        if tile_type != 'p':
+                            self.page.keyboard.press('Enter')
+                            self.assertEqual(self.page.locator('#pg .pc.sel').count(), 0)
+                self.assertEqual(seen_types, {'p', 'e', 'x'})
+                self.assertEqual(self.page.evaluate('JSON.stringify(__game.item.cells)'), original)
+                self.move_pipe_cursor(n*n-1)
+                self.page.keyboard.press('ArrowRight'); self.page.keyboard.press('ArrowDown')
+                self.assertEqual(self.pipe_cursor().get_attribute('data-i'), str(n*n-1))
+
+    def test_pipe_pointer_selection_is_the_keyboard_starting_position(self):
+        self.start('pipe-puzzle')
+        selected = self.page.evaluate('__game.item.cells.findIndex(c=>c.t==="p")')
+        self.page.locator(f'#pipe-cell-{selected}').click()
+        self.assertEqual(self.pipe_cursor().get_attribute('data-i'), str(selected))
+        self.assertEqual(self.page.locator('#pg .pc.sel').get_attribute('data-i'), str(selected))
+        n = self.page.evaluate('__game.item.N')
+        key, expected = ('ArrowRight', selected+1) if selected % n < n-1 else ('ArrowLeft', selected-1)
+        self.page.keyboard.press(key)
+        self.assertEqual(self.pipe_cursor().get_attribute('data-i'), str(expected))
+        self.assertTrue(self.pipe_cursor().evaluate('(e)=>e===document.activeElement'))
+        self.assertEqual(self.page.locator('#pg .pc.sel').get_attribute('data-i'), str(selected))
+        self.page.keyboard.press('Tab'); self.page.keyboard.press('Shift+Tab')
+        self.assertEqual(self.pipe_cursor().get_attribute('data-i'), str(expected))
+        self.move_pipe_cursor(selected)
+        self.page.keyboard.press(' ')
+        self.assertEqual(self.page.locator('#pg .pc.sel').count(), 0)
+        self.page.keyboard.down('Enter'); self.page.keyboard.down('Enter'); self.page.keyboard.up('Enter')
+        self.assertEqual(self.page.locator('#pg .pc.sel').get_attribute('data-i'), str(selected))
+
+    def test_pipe_puzzle_can_be_solved_with_real_arrow_and_enter_keys(self):
+        self.start('pipe-puzzle')
+        self.page.keyboard.press('ArrowRight')
+        for p in self.page.evaluate('__game.item.path.slice(1,-1)'):
+            state = self.page.evaluate('__game.item')
+            if state['cells'][p]['m'] == state['need'][str(p)]:
+                continue
+            source = self.page.evaluate('''p => {
+              const s=__game.item;
+              return s.cells.findIndex((c,i)=>c.t==='p' && c.m===s.need[p] && !(s.path.includes(i) && c.m===s.need[i]));
+            }''', p)
+            self.assertGreaterEqual(source, 0)
+            self.move_pipe_cursor(p); self.page.keyboard.press('Enter')
+            self.assertEqual(self.page.locator('#pg .pc.sel').get_attribute('data-i'), str(p))
+            self.move_pipe_cursor(source); self.page.keyboard.press('Enter')
+            self.assertEqual(self.page.locator('#pg .pc.sel').count(), 0)
+            if self.page.evaluate('H.done'):
+                break
+        self.assertTrue(self.page.evaluate('__game.connected()'))
+        self.assertTrue(self.page.evaluate('H.done'))
+        self.assertIn('Correct', self.page.locator('#flash').inner_text())
+
     def drag_spinner_to_solution(self):
         self.page.clock.run_for(1010)
         item = self.page.evaluate('__game.item')

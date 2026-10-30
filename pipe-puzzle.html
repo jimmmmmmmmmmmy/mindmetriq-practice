@@ -34,20 +34,23 @@ table.rev{width:100%;border-collapse:collapse;font-size:13px}table.rev td{border
 a.back{color:inherit;font-size:14px}
 .note{font-size:12px;opacity:.65;margin-top:10px}
 
-.pgrid{display:grid;gap:4px;margin:auto;width:min(100%,60vh);padding:4px}
+.pgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;margin:auto;width:min(100%,60vh);padding:4px}
+.prow{display:grid;grid-template-columns:repeat(var(--pipe-columns),minmax(0,1fr));gap:inherit}
 .pc{aspect-ratio:1;position:relative;cursor:pointer;border-radius:2px;background:#d7dce1}
 .pc svg{width:100%;height:100%;display:block}
 .pc.x{background:#c3c9cf;box-shadow:inset 0 -6px 0 #aab1b8,0 2px 3px rgba(0,0,0,.18);cursor:default}
 .pc.e{background:#2f3439;cursor:default}
-.pc.sel{outline:4px solid #3a8ee6;outline-offset:-2px;z-index:2}
-.pc.cur{box-shadow:0 0 0 3px #f0b429}
+.game-pipes .pc.cur,.game-pipes .pc.sel,.game-pipes .pc:focus-visible{outline:none;box-shadow:none}
+.game-pipes .pc.cur::after,.game-pipes .pc.sel::before{content:"";position:absolute;pointer-events:none;z-index:2}
+.game-pipes .pc.cur::after{inset:1px;border:3px solid #f5c451;box-shadow:0 0 0 1px #725000,inset 0 0 0 1px #725000}
+.game-pipes .pc.sel::before{inset:5px;border:3px solid #1c78b8}
 .pc.flow svg .ch{stroke:#bfe3ff}.pc.flow svg .chr{fill:#bfe3ff}
 </style><link rel="stylesheet" href="css/results.css?v=demo-20261030"><link rel="stylesheet" href="css/game.css?v=demo-20261030"></head><body><div id="app"></div><script src="js/storage.js?v=demo-20261030"></script><script src="js/game-logic.js?v=demo-20261030"></script><script src="js/results.js?v=demo-20261030"></script><script src="js/review.js?v=demo-20261030"></script><script src="js/demo.js?v=demo-20261030"></script><script src="js/harness.js?v=demo-20261030"></script><script>
 
 (() => {
 const D = [[0,-1,1],[1,0,2],[0,1,4],[-1,0,8]]; // dx, dy, bit (N,E,S,W)
 let it, N, cellEls, sel = -1, cur = 0, gridEl, dragFrom = -1;
-// Cell: {t:'p'|'o'|'x'|'e', m:mask}. 'p' pipe (swappable), 'x' fixed block, 'e' fixed pipe end.
+// Cell: {t:'p'|'x'|'e', m:mask}. Only blue pipes are swappable.
 const newItem = level => MMQLogic.pipes.newItem(level);
 const connected = MMQLogic.pipes.connected;
 function tileSVG(c) {
@@ -59,16 +62,30 @@ function tileSVG(c) {
   return `<svg viewBox="0 0 100 100">${bg}${p}${cap}</svg>`;
 }
 function draw(flow) {
-  if (kb) gridEl.setAttribute("aria-activedescendant", "pipe-cell-"+cur);
-  gridEl.style.gridTemplateColumns = `repeat(${N},1fr)`;
-  if (cellEls.length !== N * N) { gridEl.innerHTML = Array.from({ length: N * N }, (_, i) => `<button type="button" tabindex="-1" class="pc" id="pipe-cell-${i}" data-i="${i}"></button>`).join(""); cellEls = [...gridEl.children]; }
+  gridEl.style.setProperty("--pipe-columns", N);
+  gridEl.setAttribute("aria-rowcount", N); gridEl.setAttribute("aria-colcount", N);
+  if (cellEls.length !== N * N) {
+    gridEl.innerHTML = Array.from({ length: N }, (_, y) => `<div class="prow" role="row" aria-rowindex="${y+1}">${Array.from({ length: N }, (_, x) => { const i = y*N+x; return `<button type="button" tabindex="-1" role="gridcell" aria-colindex="${x+1}" class="pc" id="pipe-cell-${i}" data-i="${i}"></button>`; }).join("")}</div>`).join("");
+    cellEls = [...gridEl.querySelectorAll(".pc")];
+  }
   it.cells.forEach((c, i) => { const el = cellEls[i]; el.className = "pc " + c.t + (i === sel ? " sel" : "") + (i === cur && kb ? " cur" : "") + (flow ? " flow" : ""); el.innerHTML = tileSVG(c); const names = D.filter(([, ,bit])=>c.m&bit).map(([dx,dy])=>dx===1?"right":dx===-1?"left":dy===1?"bottom":"top");
-    el.setAttribute("aria-label", c.t === "x" ? "Fixed obstacle" : `${c.t === "e" ? (i === it.s ? "Start" : "End") : "Pipe"}. Open ${names.join(" and ")}. ${i===sel ? "Selected" : ""}`); el.setAttribute("aria-disabled",String(c.t!=="p")); });
+    el.tabIndex = i === cur ? 0 : -1;
+    el.setAttribute("aria-label", c.t === "x" ? "Fixed obstacle" : `${c.t === "e" ? (i === it.s ? "Start" : "End") : "Pipe"}. Open ${names.join(" and ")}.`);
+    el.setAttribute("aria-disabled",String(c.t!=="p")); el.setAttribute("aria-selected",String(i===sel)); });
 }
 let kb = false;
 const movable = i => it.cells[i] && it.cells[i].t === "p";
+function moveCursor(dx, dy) {
+  if (H.done) return;
+  const x = cur % N + dx, y = Math.floor(cur / N) + dy;
+  kb = true;
+  if (x >= 0 && x < N && y >= 0 && y < N) cur = y*N+x;
+  draw(); cellEls[cur].focus({ preventScroll: true });
+}
 function tap(i) {
-  if (H.done || !movable(i)) return;
+  if (H.done || !Number.isInteger(i) || !it.cells[i]) return;
+  cur = i;
+  if (!movable(i)) { draw(); return; }
   if (sel < 0) { sel = i; draw(); return; }
   if (sel === i) { sel = -1; draw(); return; }
   swap(sel, i);
@@ -79,17 +96,25 @@ function swap(a, b) {
   if (connected(c, it.s, N)) { draw(true); H.answer(true, { delay: 300 }); } else draw();
 }
 function setup(stage, foot) {
-  stage.innerHTML = `<div style="flex:1;display:flex;align-items:center;padding:8px 12px"><div class="pgrid" id="pg" tabindex="0" role="group" aria-label="Pipe puzzle. Arrow keys move the cursor; Enter selects a blue pipe."></div></div>`;
+  stage.innerHTML = `<div style="flex:1;display:flex;align-items:center;padding:8px 12px"><div class="pgrid" id="pg" role="grid" aria-label="Pipe puzzle. Arrow keys move across all tiles; Enter selects or swaps blue pipes."></div></div>`;
   gridEl = stage.querySelector("#pg"); cellEls = [];
   foot.innerHTML = `<span style="font-size:13px;opacity:.65;margin-right:auto">Tap two tiles to swap (or drag one onto another). It's checked automatically.</span>`;
   const idxAt = e => { const el = document.elementFromPoint(e.clientX, e.clientY); const pc = el && el.closest(".pc"); return pc ? +pc.dataset.i : -1; };
-  gridEl.addEventListener("pointerdown", e => { if (H.done) return; kb = false; const i = idxAt(e); if (i < 0) return; dragFrom = i; gridEl.setPointerCapture(e.pointerId); });
+  gridEl.addEventListener("focusin", e => {
+    const cell = e.target.closest(".pc");
+    if (H.done || !cell || !gridEl.contains(cell)) return;
+    cur = +cell.dataset.i; kb = kb || cell.matches(":focus-visible"); draw();
+  });
+  gridEl.addEventListener("pointerdown", e => { if (H.done) return; const i = idxAt(e); if (i < 0) return; kb = false; cur = i; draw(); dragFrom = i; gridEl.setPointerCapture(e.pointerId); });
   gridEl.addEventListener("pointerup", e => { if (H.done) { dragFrom = -1; return; } const i = idxAt(e), f = dragFrom; dragFrom = -1; if (i < 0 || f < 0) return;
-    if (i !== f && movable(f) && movable(i)) { sel = -1; swap(f, i); } else if (i === f) tap(i); });
+    cur = i;
+    if (i !== f && movable(f) && movable(i)) { sel = -1; swap(f, i); } else if (i === f) tap(i); else draw(); });
+  // Assistive technologies can activate a cell without a pointer sequence.
+  gridEl.addEventListener("click", e => { const cell = e.target.closest(".pc"); if (!H.done && e.detail === 0 && cell && gridEl.contains(cell)) tap(+cell.dataset.i); });
   gridEl.addEventListener("pointercancel", () => { dragFrom = -1; });
   gridEl.addEventListener("lostpointercapture", () => { dragFrom = -1; });
 }
-function render(item) { N = item.N; dragFrom = -1; it = item; it.swaps = 0; sel = -1; cur = 0; draw(); }
+function render(item) { N = item.N; dragFrom = -1; it = item; it.swaps = 0; sel = -1; cur = 0; kb = false; draw(); cellEls[cur].focus({ preventScroll: true }); }
 H.init({ id: "pipes", title: "Pipe Puzzle", cat: "Logical Reasoning", accent: "#4e7590", bg: "#eef1f4", items: 10, perItem: 20, timerText: "20 s per question",
   rules: `<p>Swap the pipes until the two dark pipe ends are connected.</p>
   <ul><li>Only the blue pipe tiles can be swapped. The dark pipe ends and the grey blocks are fixed in place.</li><li>Pipes can't be rotated, so look at the shape each gap needs.</li>
@@ -97,8 +122,16 @@ H.init({ id: "pipes", title: "Pipe Puzzle", cat: "Logical Reasoning", accent: "#
   <li>Controls: tap two tiles to swap them (the first tile you pick turns blue), or drag one tile onto another. Keyboard: arrow keys to move, Enter to select.</li></ul>`,
   snapshot: () => ({ N: it.N, cells: it.cells, s: it.s, t: it.t, path: it.path, need: it.need }),
   setup, newItem, render, timeout: () => ({ correct: false, note: "the ends weren't connected in time" }),
-  key: e => { const m = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -N, ArrowDown: N }[e.key]; kb = true;
-    if (m) { const n = cur + m; if (n >= 0 && n < N * N && !(Math.abs(m) === 1 && ((n / N) | 0) !== ((cur / N) | 0))) cur = n; draw(); } else if (e.key === "Enter" || e.key === " ") tap(cur); } });
+  key: e => {
+    const direction = { ArrowLeft: [-1,0], ArrowRight: [1,0], ArrowUp: [0,-1], ArrowDown: [0,1] }[e.key];
+    if (direction) { moveCursor(...direction); return; }
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (!e.repeat) { kb = true; tap(cur); cellEls[cur].focus({ preventScroll: true }); }
+      return;
+    }
+    return false;
+  } });
 if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, swap, tap, connected: () => connected(it.cells, it.s, N),
   // test helper: solve by placing correct pipe types onto path cells
   solve() { const c = it.cells; for (const p of it.path.slice(1, -1)) { if (c[p].t === "p" && c[p].m === it.need[p]) continue; const j = c.findIndex((q, k) => q.t === "p" && q.m === it.need[p] && !(it.path.includes(k) && c[k].m === it.need[k])); if (j >= 0) swap(p, j); if (H.done) return; } } };
