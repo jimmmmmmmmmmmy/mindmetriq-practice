@@ -47,9 +47,13 @@ for (let level = 1; level <= 5; level++) {
       }
       assert(solutions.length > 0); assert(solutions.every(s => s.length >= 2));
       assert.equal(item.sol.reduce((s,j) => s+item.nums[j],0), item.target);
-      assert(item.xs.every(x => x >= 73 && x <= 287));
+      assert(item.xs.every(x => x >= 107 && x <= 343));
+      assert.equal(item.nums.length,8);
+      assert.equal(item.plan, 5 * (i % 2 ? 1 : .75));
+      assert.equal(item.fallT, 1.625 * (i % 2 ? 1 : .75));
       // Even in hard drill there is time to cross the entire track before a catch.
-      assert(item.fallT * (505/544) > (286-74)/330);
+      const g = racer.geometry;
+      assert(item.fallT * .85 > (g.right-g.left-g.carWidth)/g.speed);
     }
   });
   test(`level ${level}: 1,000 pipe boards are unsolved and can be solved without moving fixed tiles`, () => {
@@ -57,6 +61,7 @@ for (let level = 1; level <= 5; level++) {
     for (let i = 0; i < 1000; i++) {
       const item = pipes.newItem(level), { cells, path, need, N } = item;
       assert.equal(pipes.connected(cells,item.s,N), false);
+      assert(cells.every(c=>['p','e','x'].includes(c.t)), 'no swappable floor squares');
       assert.equal(new Set(path).size,path.length);
       const fixed = cells.map((c,i) => [c,i]).filter(([c]) => c.t === 'e' || c.t === 'x').map(([c,i]) => [i,{...c}]);
       for (const p of path.slice(1,-1)) {
@@ -116,17 +121,17 @@ for (let level = 1; level <= 5; level++) {
 test('racer collision, avoidance, alternate solution, and dropped-frame clock', () => {
   const { racer }=create(seeded(42));
   function run(indices) {
-    const item={nums:[2,3,-1,6],target:5,xs:[100,260,100,260],plan:.1,fallT:1,t:0,i:-1,got:[],car:180,block:null};
+    const item={nums:[2,3,-1,6],target:5,xs:[150,300,150,300],plan:.1,fallT:1,t:0,i:-1,got:[],car:225,block:null};
     for(let t=1/120;t<=4.11;t+=1/120) {
       const k=Math.max(0,Math.min(3,Math.floor((t-item.plan)/item.fallT)));
-      const want=indices.includes(k) ? item.xs[k] : item.xs[k]<180 ? 286 : 74;
+      const want=indices.includes(k) ? item.xs[k] : item.xs[k]<225 ? 340 : 110;
       racer.advance(item,t,{l:Number(item.car>want+2),r:Number(item.car<want-2)});
     }
     assert.deepEqual(item.got,indices);
     return item.got.reduce((s,i)=>s+item.nums[i],0);
   }
   assert.equal(run([0,1]),5); assert.equal(run([2,3]),5); assert.notEqual(run([0]),5);
-  const item={...racer.newItem(5,.75),t:0,i:-1,got:[],car:180,block:null};
+  const item={...racer.newItem(5,.75),t:0,i:-1,got:[],car:225,block:null};
   const total=item.plan+item.nums.length*item.fallT;
   assert.equal(racer.advance(item,total+60,{l:0,r:0}),true); assert.equal(item.t,total); assert.deepEqual(item.got,[]);
 });

@@ -53,10 +53,11 @@ function newItem(level) {
 return { newItem, sumAt, placements };
   })();
   const racer = (() => {
+const geometry = Object.freeze({ width:450, height:620, left:75, right:375, blockSize:60, carWidth:70, carY:588, speed:366 });
 function newItem(level, timer = 1) {
   checkLevel(level);
   if (!Number.isFinite(timer) || timer <= 0) throw new RangeError("Timer multiplier must be positive");
-  const n = [5, 6, 6, 7, 8][level - 1], neg = level >= 2, mag = [6, 7, 9, 9, 12][level - 1];
+  const n = 8, neg = level >= 2, mag = [6, 7, 9, 9, 12][level - 1];
   for (let attempt = 0; attempt < 1000; attempt++) {
     const nums = Array.from({ length: n }, () => { let v = H.rnd(1, mag); if (neg && random() < .18 + .06 * level) v = -v; return v; });
     const k = H.rnd(2, Math.min(n - 2, 2 + Math.floor(level / 2)));
@@ -64,12 +65,13 @@ function newItem(level, timer = 1) {
     const target = idx.reduce((s, i) => s + nums[i], 0);
     if (target === 0 || nums.includes(target) || Math.abs(target) > 25) continue;
     if (nums.reduce((s, v) => s + v, 0) === target) continue; // catching everything must not be a solution
-    return { nums, target, sol: idx.sort((a, b) => a - b), xs: nums.map(() => H.rnd(73, 287)), fallT: (2.0 - .15 * level) * timer, plan: 5 * timer };
+    return { nums, target, sol: idx.sort((a, b) => a - b), xs: nums.map(() => H.rnd(107, 343)), fallT: 1.625 * timer, plan: 5 * timer };
   }
   throw new Error("Could not generate a puzzle within the attempt budget");
 }
 // Update with elapsed seconds, so dropped frames never extend a round.
 function advance(item, elapsed, keys) {
+  const {left,right,blockSize:bs,carWidth:cw,carY,speed} = geometry;
   const total = item.plan + item.nums.length * item.fallT;
   const end = Math.min(total, Math.max(item.t, elapsed));
   let remaining = end - item.t;
@@ -80,25 +82,25 @@ function advance(item, elapsed, keys) {
     item.i = Math.min(item.nums.length - 1, Math.max(-1, k));
     item.block = k < 0 || k >= item.nums.length ? null : {
       v: item.nums[k], x: item.xs[k], hit: item.got.includes(k),
-      y: -34 + ((end - item.plan) / item.fallT - k) * 544
+      y: -bs + ((end - item.plan) / item.fallT - k) * (carY+bs)
     };
   }
   while (remaining > 1e-9) {
     const dt = Math.min(remaining, 1 / 120); remaining -= dt; item.t += dt;
-    item.car = Math.max(74, Math.min(286, item.car + (keys.r - keys.l) * 330 * dt));
+    item.car = Math.max(left+cw/2, Math.min(right-cw/2, item.car + (keys.r - keys.l) * speed * dt));
     const k = Math.floor((item.t - item.plan) / item.fallT);
     if (k < 0 || k >= item.nums.length) continue;
     if (k !== item.i) { item.i = k; item.block = { v: item.nums[k], x: item.xs[k], hit: item.got.includes(k) }; }
     const block = item.block;
-    block.y = -34 + ((item.t - item.plan) / item.fallT - k) * 544;
-    if (!block.hit && block.y + 17 >= 488 && block.y - 17 <= 520 && Math.abs(block.x - item.car) < 33) {
+    block.y = -bs + ((item.t - item.plan) / item.fallT - k) * (carY+bs);
+    if (!block.hit && block.y + bs/2 >= carY-44 && block.y - bs/2 <= carY+32 && Math.abs(block.x - item.car) < (bs+cw)/2-4) {
       block.hit = true; item.got.push(k);
     }
   }
   item.t = end;
   return end >= total;
 }
-return { newItem, advance };
+return { newItem, advance, geometry };
   })();
   const pipes = (() => {
 const D = [[0,-1,1],[1,0,2],[0,1,4],[-1,0,8]];
@@ -146,16 +148,15 @@ function newItem(level) {
     const dist = Math.abs(s % N - t % N) + Math.abs(((s / N) | 0) - ((t / N) | 0));
     if (dist < 3) continue;
     const path = genPath(N, s, t, Math.min(dist + 1 + 2 * (level - 1), N * N - 6)); if (!path) continue;
-    const cells = Array.from({ length: N * N }, () => ({ t: "o", m: 0 }));
+    const cells = Array.from({ length: N * N }, () => ({ t: "x", m: 0 }));
     path.forEach((c, k) => { let m = 0; if (k > 0) m |= bitTo(c, path[k - 1], N); if (k < path.length - 1) m |= bitTo(c, path[k + 1], N); cells[c] = { t: k === 0 || k === path.length - 1 ? "e" : "p", m }; });
     const need = {}; path.forEach(c => need[c] = cells[c].m);
-    const free = H.shuffle([...cells.keys()].filter(i => cells[i].t === "o"));
-    const nObs = H.rnd(1, 2 + level), nExtra = H.rnd(0, Math.max(0, level - 2));
-    free.slice(0, nObs).forEach(i => cells[i] = { t: "x", m: 0 });
+    const free = H.shuffle([...cells.keys()].filter(i => cells[i].t === "x"));
+    const nExtra = H.rnd(0, Math.max(0, level - 2));
     const PIPES = [5, 10, 3, 6, 12, 9];
-    free.slice(nObs, nObs + nExtra).forEach(i => cells[i] = { t: "p", m: H.pick(PIPES) });
-    // Scramble with random swaps among movable cells (each swap moves at least one pipe).
-    const mov = [...cells.keys()].filter(i => cells[i].t === "p" || cells[i].t === "o");
+    free.slice(0, nExtra).forEach(i => cells[i] = { t: "p", m: H.pick(PIPES) });
+    // Only blue pipe tiles move. Every non-pipe location is a fixed obstacle.
+    const mov = [...cells.keys()].filter(i => cells[i].t === "p");
     const pipes = () => mov.filter(i => cells[i].t === "p");
     const nSwaps = [2, 3, 4, 6, 8][level - 1];
     for (let k = 0; k < nSwaps; k++) { const a = H.pick(pipes()), b = H.pick(mov.filter(i => i !== a && !(cells[i].t === "p" && cells[i].m === cells[a].m))); if (b === undefined) continue; [cells[a], cells[b]] = [cells[b], cells[a]]; }

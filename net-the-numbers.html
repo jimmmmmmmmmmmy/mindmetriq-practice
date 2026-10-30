@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f7f4f2"><title>Net the Numbers practice</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
@@ -42,15 +42,15 @@ a.back{color:inherit;font-size:14px}
 .cell.in:not(.p):not(.n){background:#e8c4c2}
 .cell.best{outline:3px dashed #2c6b37;outline-offset:-3px}
 .sumb{text-align:center;font-family:Georgia,serif;font-size:20px;height:28px;margin-top:8px}
-</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"><link rel="stylesheet" href="css/game.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/demo.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const N = 5; let it, pos, gridEl, cells, drag = null, showSum = false;
 const { sumAt } = MMQLogic.net;
 const newItem = level => MMQLogic.net.newItem(level);
 function setup(stage, foot) {
-  stage.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:10px 14px"><div class="grid" id="grid"></div><div class="sumb" id="sumb"></div></div>`;
-  foot.innerHTML = `<button class="btn primary" id="submit">Submit &rarr;</button>`;
+  stage.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:10px 14px"><div class="grid" id="grid" tabindex="0" role="group" aria-label="Number grid. Arrow keys move the net; Enter submits."></div><div class="sumb" id="sumb"></div></div>`;
+  foot.innerHTML = `<button class="btn primary" id="submit">Submit</button>`;
   gridEl = stage.querySelector("#grid");
   gridEl.style.gridTemplateColumns = `repeat(${N},1fr)`; gridEl.style.width = "min(100%, 62vh)";
   gridEl.innerHTML = Array.from({ length: N*N }, (_, i) => `<div class="cell" data-i="${i}"></div>`).join("");
@@ -73,13 +73,13 @@ function move(x, y, abs) {
 function draw(reveal) {
   const inSet = new Set(it.sh.cells.map(([dx,dy]) => (pos[1]+dy)*N + pos[0]+dx));
   const bestSet = new Set(it.sh.cells.map(([dx,dy]) => (it.bp[1]+dy)*N + it.bp[0]+dx));
-  cells.forEach((c, i) => { const v = it.g[i]; c.className = "cell" + (v > 0 ? " p" : v < 0 ? " n" : "") + (inSet.has(i) ? " in" : "") + (reveal && bestSet.has(i) ? " best" : ""); c.textContent = v || ""; });
+  cells.forEach((c, i) => { const v = it.g[i]; c.className = "cell" + (v > 0 ? " p" : v < 0 ? " n" : "") + (inSet.has(i) ? " in" : "") + (reveal && bestSet.has(i) ? " best" : ""); c.textContent = v || ""; c.setAttribute("aria-label", `Row ${Math.floor(i/N)+1}, column ${i%N+1}: ${v < 0 ? "minus "+(-v) : v}. ${inSet.has(i) ? "Inside net" : "Outside net"}`); });
   document.getElementById("sumb").textContent = showSum ? "Net sum: " + sumAt(it.g, it.sh, pos[0], pos[1]) : "";
 }
 function render(item) { drag = null; it = item; pos = [Math.floor((N - it.sh.w) / 2), Math.floor((N - it.sh.h) / 2)]; showSum = false; draw(); }
 function result() { const s = sumAt(it.g, it.sh, pos[0], pos[1]); return { correct: s === it.best, note: `your sum ${s}, best possible ${it.best} (see the highlighted solution in the review)` }; }
-function submit() { if (H.done) return; const r = result(); if (H.mode.feedback) { showSum = true; draw(true); } H.answer(r.correct, r); }
-H.init({ id: "net", title: "Net the Numbers", cat: "Numerical Reasoning", accent: "#8f4b4b", items: 12, perItem: 20, timerText: "20 s per question",
+function submit() { if (!H.canSubmit) return; const r = result(); if (H.mode.feedback) { showSum = true; draw(true); } H.answer(r.correct, r); }
+H.init({ id: "net", title: "Net the Numbers", cat: "Numerical Reasoning", accent: "#8f4b4b", items: 12, perItem: 20, submitDelay: 1, timerText: "20 s per question",
   rules: `<p>Move the net over the grid to capture the <b>highest possible sum</b>. Only the single best placement counts as correct.</p>
   <ul><li>Every number inside the net is added up. Empty tiles count as 0.</li><li>Negative tiles subtract, but sometimes you need them to reach the best sum. The best sum can itself be negative.</li>
   <li>The net moves but can't rotate or change size.</li><li>Controls: drag on the grid, or use the arrow keys. Tap <b>Submit</b> or press Enter.</li>

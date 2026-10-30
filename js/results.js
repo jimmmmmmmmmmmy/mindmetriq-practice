@@ -21,10 +21,10 @@
   // this app's practice guidance, not an official diagnostic interpretation.
   const guidance = {
     net: { focus: 'Compare sums and positions', strategy: 'Compare legal net positions and add every covered number, including negatives.', difficulty: 'Higher tiers use larger nets, more negative numbers, and closer competing totals.' },
-    racer: { focus: 'Plan the target sum', strategy: 'Use the planning time to choose a subset that reaches the target, then steer away from the rest.', difficulty: 'Higher tiers add numbers and negatives, increase number size, and speed up the falling blocks.' },
+    racer: { focus: 'Plan the target sum', strategy: 'Use the planning time to choose a subset that reaches the target, then steer away from the rest.', difficulty: 'Higher tiers use larger numbers, more negatives and larger target subsets. Hard drill speeds up both phases.' },
     swipe: { focus: 'Compare word meanings', strategy: 'Distinguish meaning from association: related words can still belong in Other.', difficulty: 'Higher tiers use less familiar vocabulary and finer distinctions between related meanings.' },
     wordlogic: { focus: 'Keep the relationship consistent', strategy: 'Name the relationship in the first pair, then apply it in the same direction to the second pair.', difficulty: 'Higher tiers use more specialised relationships and less familiar vocabulary.' },
-    pipes: { focus: 'Trace a continuous route', strategy: 'Trace from one fixed end. Each pipe must open toward its neighbour, and the neighbour must open back.', difficulty: 'Higher tiers use longer routes, more scrambled tiles and obstacles, and eventually a larger board.' },
+    pipes: { focus: 'Trace a continuous route', strategy: 'Trace from one fixed end. Each pipe must open toward its neighbour, and the neighbour must open back.', difficulty: 'Higher tiers use longer routes, more scrambled pipes, and eventually a larger board.' },
     spinner: { focus: 'Check every symbol pair', strategy: 'Check each pair for exactly one match: shape or shading. Matching both, or neither, breaks the rule.', difficulty: 'Higher tiers add wheel positions, another shape, and a third shading.' }
   };
   function feedback(summary, id) {

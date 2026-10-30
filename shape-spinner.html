@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f7f4f2"><title>Shape Spinner practice</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#e9e6e3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2a2a}
@@ -36,7 +36,7 @@ a.back{color:inherit;font-size:14px}
 
 svg{display:block;margin:auto;width:min(100%,58vh);touch-action:none}
 .wheel{cursor:grab}
-</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"><link rel="stylesheet" href="css/game.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/demo.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const FILL = { d: "#2f3437", w: "#ffffff", g: "#9aa3ab" };
@@ -47,25 +47,25 @@ const newItem = level => MMQLogic.spinner.newItem(level);
 function sym(o, x, y, rotDeg, size = 22) {
   const st = `fill="${FILL[o.f]}" stroke="${o.f === "w" ? "#aab" : FILL[o.f]}" stroke-width="2"`;
   const t = `transform="translate(${x},${y}) rotate(${rotDeg})"`;
-  if (o.s === "c") return `<circle cx="${x}" cy="${y}" r="${size * .8}" ${st}/>`;
+  if (o.s === "c") return `<circle cx="${x}" cy="${y}" r="${size * .9}" ${st}/>`;
   if (o.s === "s") return `<rect x="${-size * .75}" y="${-size * .75}" width="${size * 1.5}" height="${size * 1.5}" ${st} ${t}/>`;
   if (o.s === "r") return `<rect x="${-size * .65}" y="${-size * .65}" width="${size * 1.3}" height="${size * 1.3}" ${st} transform="translate(${x},${y}) rotate(${rotDeg + 45})"/>`;
   return `<polygon points="0,${size} ${-size * .95},${-size * .7} ${size * .95},${-size * .7}" ${st} ${t}/>`; // triangle; tip points toward the centre
 }
 const pol = (deg, r) => [r * Math.sin(deg * Math.PI / 180), -r * Math.cos(deg * Math.PI / 180)];
 function draw() {
-  const n = it.n, s = step(), R = n > 6 ? 150 : 145, rIn = n > 6 ? 92 : 82, size = n > 6 ? 16 : 20;
-  let o = ""; it.outer.forEach((q, i) => { const a = i * s, [x, y] = pol(a, R + 30); o += sym(q, x, y, a, size); });
-  let w = `<circle r="${R - 12}" fill="#d7dee5" stroke="#b9c3cc" stroke-width="2"/>`;
+  const n = it.n, s = step(), R = 150, rIn = 110, size = n > 6 ? 20 : 25.5;
+  let o = ""; it.outer.forEach((q, i) => { const a = i * s, [x, y] = pol(a, R + 40); o += sym(q, x, y, a, size); });
+  let w = `<circle r="${R}" fill="#d7dee5" stroke="#b9c3cc" stroke-width="2"/>`;
   it.inner.forEach((q, j) => { const a = j * s, [x, y] = pol(a, rIn); w += sym(q, x, y, a + 180, size); });
   document.getElementById("outer").innerHTML = o; wheelG.innerHTML = w; setAng();
 }
-function setAng() { wheelG.setAttribute("transform", `rotate(${ang})`); }
+function setAng() { wheelG.setAttribute("transform", `rotate(${ang})`); svg.setAttribute("aria-label", `Inner wheel: ${Math.round(ang/step())} steps clockwise, ${it.n} symbol pairs. Arrow keys rotate; Enter submits.`); }
 function snap() { rot = ((Math.round(ang / step()) % it.n) + it.n) % it.n; ang = Math.round(ang / step()) * step(); setAng(); }
 function turn(d) { if (H.done) return; ang += d * step(); snap(); }
 function setup(stage, foot) {
-  stage.innerHTML = `<div style="flex:1;display:flex;align-items:center;padding:8px"><svg id="svg" viewBox="-210 -210 420 420"><g id="outer"></g><g id="wheel" class="wheel"></g></svg></div>`;
-  foot.innerHTML = `<button class="btn" id="l" aria-label="rotate left">&larr;</button><button class="btn" id="r" aria-label="rotate right">&rarr;</button><span style="flex:1"></span><button class="btn primary" id="submit">Submit &rarr;</button>`;
+  stage.innerHTML = `<div style="flex:1;display:flex;align-items:center;padding:8px"><svg id="svg" viewBox="-225 -225 450 450" tabindex="0" role="img" aria-label="Rotate the inner wheel. Use left and right arrow keys, then Enter to submit."><g id="outer"></g><g id="wheel" class="wheel"></g></svg></div>`;
+  foot.innerHTML = `<button class="btn" id="l" aria-label="rotate left">&larr;</button><button class="btn" id="r" aria-label="rotate right">&rarr;</button><span style="flex:1"></span><button class="btn primary" id="submit">Submit</button>`;
   svg = stage.querySelector("#svg"); wheelG = stage.querySelector("#wheel");
   foot.querySelector("#l").onclick = () => turn(-1); foot.querySelector("#r").onclick = () => turn(1); foot.querySelector("#submit").onclick = submit;
   const angOf = e => { const b = svg.getBoundingClientRect(); return Math.atan2(e.clientX - (b.left + b.width / 2), -(e.clientY - (b.top + b.height / 2))) * 180 / Math.PI; };
@@ -75,8 +75,8 @@ function setup(stage, foot) {
 }
 function render(item) { drag = null; it = item; ang = 0; rot = 0; draw(); }
 function result() { drag = null; snap(); const c = valid(it.inner, it.outer, rot); return { correct: c, rotation: rot, note: `the correct position was ${it.sol} step(s) clockwise from the start` }; }
-function submit() { if (H.done) return; const r = result(); if (H.mode.feedback && !r.correct) { ang = it.sol * step(); rot = it.sol; setAng(); } H.answer(r.correct, r); }
-H.init({ id: "spinner", title: "Shape Spinner", cat: "Logical Reasoning", accent: "#3e4b57", bg: "#eef1f4", items: 10, perItem: 12, timerText: "12 s per question",
+function submit() { if (!H.canSubmit) return; const r = result(); if (H.mode.feedback && !r.correct) { ang = it.sol * step(); rot = it.sol; setAng(); } H.answer(r.correct, r); }
+H.init({ id: "spinner", title: "Shape Spinner", cat: "Logical Reasoning", accent: "#3e4b57", bg: "#eef1f4", items: 10, perItem: 12, submitDelay: 1, timerText: "12 s per question",
   rules: `<p>Rotate the inner wheel to find the <b>one</b> position where every inner shape sits next to an outer shape that has <b>either the same shape or the same shading, but not both</b>.</p>
   <ul><li>Same shape and same shading: incorrect. Different shape and different shading: also incorrect.</li><li>Check every pair before you submit.</li>
   <li>Harder levels add more positions, a diamond shape, and a grey shading.</li>
