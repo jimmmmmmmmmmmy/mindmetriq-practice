@@ -36,7 +36,7 @@ a.back{color:inherit;font-size:14px}
 
 svg{display:block;margin:auto;width:min(100%,58vh);touch-action:none}
 .wheel{cursor:grab}
-</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const FILL = { d: "#2f3437", w: "#ffffff", g: "#9aa3ab" };
@@ -74,13 +74,14 @@ function setup(stage, foot) {
   const up = () => { if (H.done || !drag) { drag = null; return; } drag = null; snap(); }; svg.addEventListener("pointerup", up); svg.addEventListener("pointercancel", up);
 }
 function render(item) { drag = null; it = item; ang = 0; rot = 0; draw(); }
-function result() { drag = null; snap(); const c = valid(it.inner, it.outer, rot); return { correct: c, note: `the correct position was ${it.sol} step(s) clockwise from the start` }; }
+function result() { drag = null; snap(); const c = valid(it.inner, it.outer, rot); return { correct: c, rotation: rot, note: `the correct position was ${it.sol} step(s) clockwise from the start` }; }
 function submit() { if (H.done) return; const r = result(); if (H.mode.feedback && !r.correct) { ang = it.sol * step(); rot = it.sol; setAng(); } H.answer(r.correct, r); }
 H.init({ id: "spinner", title: "Shape Spinner", cat: "Logical Reasoning", accent: "#3e4b57", bg: "#eef1f4", items: 10, perItem: 12, timerText: "12 s per question",
   rules: `<p>Rotate the inner wheel to find the <b>one</b> position where every inner shape sits next to an outer shape that has <b>either the same shape or the same shading, but not both</b>.</p>
   <ul><li>Same shape and same shading: incorrect. Different shape and different shading: also incorrect.</li><li>Check every pair before you submit.</li>
   <li>Harder levels add more positions, a diamond shape, and a grey shading.</li>
   <li>Controls: drag the wheel round, or tap the ← → buttons or press the ← → keys. Tap <b>Submit</b> or press Enter. When time runs out, the current position is submitted.</li></ul>`,
+  snapshot: info => ({ n: it.n, inner: it.inner, outer: it.outer, sol: it.sol, rot: info.rotation ?? rot }),
   setup, newItem, render, timeout: () => result(),
   key: e => { if (e.key === "ArrowLeft") turn(-1); else if (e.key === "ArrowRight") turn(1); else if (e.key === "Enter" || e.key === " ") submit(); } });
 if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, get rot() { return rot; }, turn, submit };

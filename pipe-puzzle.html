@@ -42,7 +42,7 @@ a.back{color:inherit;font-size:14px}
 .pc.sel{outline:4px solid #3a8ee6;outline-offset:-2px;z-index:2}
 .pc.cur{box-shadow:0 0 0 3px #f0b429}
 .pc.flow svg .ch{stroke:#bfe3ff}.pc.flow svg .chr{fill:#bfe3ff}
-</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const D = [[0,-1,1],[1,0,2],[0,1,4],[-1,0,8]]; // dx, dy, bit (N,E,S,W)
@@ -93,6 +93,7 @@ H.init({ id: "pipes", title: "Pipe Puzzle", cat: "Logical Reasoning", accent: "#
   <ul><li>Only the blue pipe tiles (and empty floor tiles) can be swapped. The dark pipe ends and the grey blocks are fixed in place.</li><li>Pipes can't be rotated, so look at the shape each gap needs.</li>
   <li>The puzzle is checked automatically: as soon as the ends are joined, the item counts as correct.</li>
   <li>Controls: tap two tiles to swap them (the first tile you pick turns blue), or drag one tile onto another. Keyboard: arrow keys to move, Enter to select.</li></ul>`,
+  snapshot: () => ({ N: it.N, cells: it.cells, s: it.s, t: it.t, path: it.path, need: it.need }),
   setup, newItem, render, timeout: () => ({ correct: false, note: "the ends weren't connected in time" }),
   key: e => { const m = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -N, ArrowDown: N }[e.key]; kb = true;
     if (m) { const n = cur + m; if (n >= 0 && n < N * N && !(Math.abs(m) === 1 && ((n / N) | 0) !== ((cur / N) | 0))) cur = n; draw(); } else if (e.key === "Enter" || e.key === " ") tap(cur); } });

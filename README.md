@@ -23,6 +23,23 @@ Every game also has a three-item practice run with feedback and a hard drill wit
 
 `js/harness.js` owns the run, deadline, score, and transition to the next item. Inputs check the deadline before changing the puzzle, and each item can score only once. Net and spinner submit the current position at timeout; racer checks the caught sum; unanswered verbal and pipe items fail. Dropped frames do not extend racer time or award catches for long unseen intervals. `js/storage.js` validates saved records and tolerates blocked, full, or corrupt storage.
 
+## Answer reviews and feedback
+
+Finish any run to review every original puzzle. The first missed question opens automatically. Use **Your answer** and **Correct answer** (or **One valid solution**) to switch views. Green highlights show the solution, amber shows the submitted selection, and the explanation states the task rule. Spinner reviews check every symbol pair; pipe reviews reconstruct a connected route using the same tile inventory and fixed obstacles. Valid alternative racer subsets remain marked correct.
+
+Feedback describes what happened in the run and suggests a task-specific strategy. It reports accuracy and time by actual difficulty tier. It does not diagnose cognitive strengths or weaknesses from a short practice run. Review snapshots are independent of live game state and stay available on the current results screen until a new run or reload; only summary scores are saved to browser history.
+
+The publisher's [technical manual](https://www.testpartnership.com/fact-sheets/MindmetriQ-Technical-Manual.pdf) describes calibrated Rasch scoring, adaptive item targeting around 70% success, and norm-based percentile interpretation (printed pages 28–37 and 84). That success target is not a pass mark or percentile. Our generated items and authored tiers have not been calibrated to that scale, so this app does not calculate expected official scores, percentiles, or pass/fail predictions.
+
+| Measure | This app reports |
+|---|---|
+| Correct count | One point per correct item. |
+| Practice points | Sum of the tiers of correctly answered items, out of the sum of all tiers received. |
+| Response time | Recorded separately, with no speed bonus. |
+| Difficulty | Authored tiers 1–5, with one-tier changes after each answer; the actual selected tier is shown. |
+
+The **How to read your score** panel on every results screen explains these differences and links to the public methodology and [task descriptions](https://www.testpartnership.com/gamified-assessment.html). Review explanations and practice strategies are written for this app from those task rules; they are not official candidate feedback or norm interpretations.
+
 ## Logic audit fixes
 
 1. Centralized the six duplicated timer/scoring controllers and blocked late answers, duplicate submissions, and swaps during feedback.
@@ -30,6 +47,10 @@ Every game also has a three-item practice run with feedback and a hard drill wit
 3. Made racer timing follow elapsed time, fixed collision stepping, pre-generated falling positions, reset held controls on blur, and applied hard timing to planning too.
 4. Replaced ambiguous verbal banks, fixed keyboard selection and boost deadlines, bounded generator searches, and repaired pipe-path backtracking.
 5. Validated history before rendering it, separated best timed-test scores from hard drills, and limited solver helpers to the explicit `?debug=1` development URL.
+
+## Private screenshots
+
+Keep local screenshots in `shots/`. This directory is ignored by Git and excluded from new repository commits and Pages deployments. It remains on your computer. Screenshots committed before this change still exist in public Git history; ignoring the folder cannot revoke those past copies.
 
 ## Run checks
 
@@ -48,6 +69,6 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -p 'test_browser.py' -v
 ```
 
-The Node suite independently checks 20,000 generated numerical/spatial puzzles and 15,000 verbal questions across all five levels, plus collisions, alternative racer solutions, malformed pipes, and history recovery. Browser tests cover complete runs, replay, deadlines without animation frames, boosts, input locking, visible spinner positions, touch/keyboard controls, and production URLs. GitHub Actions runs both suites on pull requests and changes to `main`.
+The Node suite independently checks 20,000 generated numerical/spatial puzzles and 15,000 verbal questions across all five levels, plus collisions, alternative racer solutions, malformed pipes, and history recovery. Browser tests cover complete runs, replay, deadlines without animation frames, boosts, input locking, visible spinner positions, touch/keyboard controls, and production URLs. Additional checks verify reconstructed solutions, immutable submitted snapshots, answer-view toggles, and mobile layouts. GitHub Actions runs both suites on pull requests and changes to `main`.
 
 For development, append `?debug=1` to a game URL to expose its state and solver helpers. This is a local practice app: browser code and local scores are inspectable and editable, so it should not be used for verified competitive rankings or hiring decisions.

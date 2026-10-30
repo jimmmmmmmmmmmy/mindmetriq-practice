@@ -77,12 +77,13 @@ class BrowserTests(unittest.TestCase):
         else:
             self.drive_racer()
 
-    def drive_racer(self):
+    def drive_racer(self, selected_indices=None):
         page = self.page
         item = page.evaluate('__game.item')
+        chosen = item['sol'] if selected_indices is None else selected_indices
         page.clock.fast_forward(max(0, math.ceil((item['plan']-page.evaluate('H.elapsed()')) * 1000)))
         for k, x in enumerate(item['xs']):
-            desired = x if k in item['sol'] else (286 if x < 180 else 74)
+            desired = x if k in chosen else (286 if x < 180 else 74)
             car = page.evaluate('__game.item.car')
             key = 'ArrowRight' if desired > car else 'ArrowLeft'
             page.keyboard.down(key)
@@ -93,7 +94,7 @@ class BrowserTests(unittest.TestCase):
             page.clock.run_for(max(0, math.ceil((end-elapsed)*1000)+1))
         page.clock.run_for(32)  # Let the next animation frame submit the final sum.
         self.assertTrue(page.evaluate('H.done'))
-        self.assertEqual(page.evaluate('__game.item.got'), item['sol'])
+        self.assertEqual(page.evaluate('__game.item.got'), chosen)
 
     def test_all_games_complete_three_correct_practice_items_and_restart(self):
         for game, (game_id, _, _) in GAMES.items():
@@ -110,6 +111,66 @@ class BrowserTests(unittest.TestCase):
                 self.assertEqual(self.page.locator('#hNum').inner_text(), '1')
                 self.assertTrue(self.page.evaluate('__game.item !== window.completedItem'))
                 self.assertFalse(self.page.evaluate('H.done'))
+
+    def wrong(self, game):
+        if game == 'net-the-numbers':
+            self.page.evaluate("""() => { const g=__game; const p=MMQLogic.net.placements(g.item.sh).find(([x,y])=>MMQLogic.net.sumAt(g.item.g,g.item.sh,x,y)!==g.item.best); g.move(...p,true); g.submit(); }""")
+        elif game == 'shape-spinner':
+            self.page.evaluate('__game.submit()')  # Start rotation is never a solution.
+        elif game == 'link-swipe':
+            self.page.evaluate("__game.choose(['A','S','N'].find(a=>a!==__game.item[2]))")
+        elif game == 'word-logic':
+            index = self.page.evaluate('__game.item.opts.findIndex(w=>w!==__game.item.b[4])')
+            self.page.locator(f'.opt[data-i="{index}"]').click()
+        elif game == 'pipe-puzzle':
+            self.page.clock.fast_forward(20010)
+        else:
+            self.drive_racer([])
+
+    def test_all_six_results_preserve_submitted_puzzles_and_show_solutions(self):
+        for game, (game_id, _, _) in GAMES.items():
+            with self.subTest(game=game):
+                self.start(game)
+                self.assertEqual(self.page.locator('#answerReviews').count(), 0)
+                self.wrong(game)
+                self.page.clock.fast_forward(3100)
+                for _ in range(2):
+                    self.correct(game); self.page.clock.fast_forward(1400)
+                self.assertEqual(self.page.locator('#endScore').inner_text(), '2 / 3')
+                self.assertEqual(self.page.locator('.answer-review').count(), 3)
+                first = self.page.locator('#review-0')
+                self.assertTrue(first.evaluate('(el)=>el.open'))
+                self.assertEqual(self.page.locator('.level-table tbody tr').count(), 5)
+                before = self.page.evaluate('JSON.stringify(__game.item)')
+                if game == 'shape-spinner':
+                    self.assertEqual(first.locator('.pair-fail').count(), 0)
+                else:
+                    self.assertGreater(first.locator('.solution').count(), 0)
+                first.get_by_role('button', name='Your answer', exact=True).click()
+                self.assertEqual(first.get_by_role('button', name='Your answer', exact=True).get_attribute('aria-pressed'), 'true')
+                if game == 'shape-spinner':
+                    self.assertGreater(first.locator('.pair-fail').count(), 0)
+                    self.assertIn('0 steps clockwise', first.inner_text())
+                elif game == 'number-racer':
+                    self.assertIn('No numbers = 0', first.inner_text())
+                else:
+                    self.assertGreater(first.locator('.submitted').count(), 0)
+                first.get_by_role('button').nth(1).click()
+                self.assertEqual(self.page.evaluate('JSON.stringify(__game.item)'), before)
+                self.assertEqual(self.page.locator('#endScore').inner_text(), '2 / 3')
+                self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+
+    def test_timeout_word_review_does_not_treat_a_highlight_as_a_submitted_answer(self):
+        self.start('word-logic')
+        self.page.keyboard.press('ArrowDown')
+        self.page.clock.fast_forward(15010)
+        self.page.clock.fast_forward(3100)
+        for _ in range(2):
+            self.correct('word-logic'); self.page.clock.fast_forward(1400)
+        first = self.page.locator('#review-0')
+        first.get_by_role('button', name='Your answer', exact=True).click()
+        self.assertIn('No answer submitted', first.inner_text())
+        self.assertEqual(first.locator('.submitted').count(), 0)
 
     def test_full_timed_runs_use_the_published_item_counts(self):
         for game, (game_id, count, _) in GAMES.items():

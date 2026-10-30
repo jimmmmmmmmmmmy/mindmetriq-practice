@@ -42,7 +42,7 @@ a.back{color:inherit;font-size:14px}
 .cell.in:not(.p):not(.n){background:#e8c4c2}
 .cell.best{outline:3px dashed #2c6b37;outline-offset:-3px}
 .sumb{text-align:center;font-family:Georgia,serif;font-size:20px;height:28px;margin-top:8px}
-</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/harness.js"></script><script>
+</style><link rel="stylesheet" href="css/results.css"></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/results.js"></script><script src="js/review.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const N = 5; let it, pos, gridEl, cells, drag = null, showSum = false;
@@ -77,13 +77,14 @@ function draw(reveal) {
   document.getElementById("sumb").textContent = showSum ? "Net sum: " + sumAt(it.g, it.sh, pos[0], pos[1]) : "";
 }
 function render(item) { drag = null; it = item; pos = [Math.floor((N - it.sh.w) / 2), Math.floor((N - it.sh.h) / 2)]; showSum = false; draw(); }
-function result() { const s = sumAt(it.g, it.sh, pos[0], pos[1]); return { correct: s === it.best, note: `your sum ${s}, best possible ${it.best} (dashed outline)` }; }
+function result() { const s = sumAt(it.g, it.sh, pos[0], pos[1]); return { correct: s === it.best, note: `your sum ${s}, best possible ${it.best} (see the highlighted solution in the review)` }; }
 function submit() { if (H.done) return; const r = result(); if (H.mode.feedback) { showSum = true; draw(true); } H.answer(r.correct, r); }
 H.init({ id: "net", title: "Net the Numbers", cat: "Numerical Reasoning", accent: "#8f4b4b", items: 12, perItem: 20, timerText: "20 s per question",
   rules: `<p>Move the net over the grid to capture the <b>highest possible sum</b>. Only the single best placement counts as correct.</p>
   <ul><li>Every number inside the net is added up. Empty tiles count as 0.</li><li>Negative tiles subtract, but sometimes you need them to reach the best sum. The best sum can itself be negative.</li>
   <li>The net moves but can't rotate or change size.</li><li>Controls: drag on the grid, or use the arrow keys. Tap <b>Submit</b> or press Enter.</li>
   <li>When time runs out, the net's current position is submitted.</li></ul>`,
+  snapshot: () => ({ g: it.g, sh: it.sh, bp: it.bp, pos, best: it.best }),
   setup, newItem, render, timeout: () => { const r = result(); if (H.mode.feedback) { showSum = true; draw(true); } return r; },
   key: e => { const m = { ArrowLeft: [-1,0], ArrowRight: [1,0], ArrowUp: [0,-1], ArrowDown: [0,1] }[e.key]; if (m) move(m[0], m[1]); else if (e.key === "Enter" || e.key === " ") submit(); } });
 if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, get pos() { return pos; }, move, submit };

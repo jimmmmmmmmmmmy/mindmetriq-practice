@@ -97,7 +97,8 @@ const H = (() => {
     itemDone = true; cancelAnimationFrame(raf);
     if (G.stop) G.stop();
     const used = Math.min(elapsed(), limit || 1e9);
-    results.push({ correct: !!correct, used, level: itemLevel, info });
+    const snapshot = structuredClone(G.snapshot(info));
+    results.push({ correct: !!correct, used, level: itemLevel, info: { ...info }, snapshot });
     const fb = mode.feedback;
     flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
     level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
@@ -118,10 +119,10 @@ const H = (() => {
       `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
   }
   function end() {
-    const n = results.length, c = results.filter(r => r.correct).length;
-    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
-    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
-    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
+    const summary = MMQResults.summarize(results), guidance = MMQResults.feedback(summary, G.id);
+    const { total: n, correct: c, time } = summary, wall = (performance.now() - runStart) / 1000;
+    const escape = MMQReview.escape;
+    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: summary.maxLevel };
     MMQHistory.save(G.id, rec);
     $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
       <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
@@ -130,13 +131,31 @@ const H = (() => {
         <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
         <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
         <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
-        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
+        <div><b>${summary.points} / ${summary.possible}</b><span>Practice points</span></div>
         <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
       </div>
-      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
-      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
+      <section class="result-section run-feedback" aria-label="Practice feedback">
+        <b>${escape(guidance.focus)}</b><p>${escape(guidance.observation)}</p><p>${escape(guidance.strategy)}</p>
+        <p>${c === n ? "Open a question below to check the reasoning." : "The first missed question is open below. Compare your answer with the highlighted solution."}</p>
+      </section>
+      <section class="result-section" aria-labelledby="difficultyTitle"><h2 id="difficultyTitle">Accuracy by difficulty</h2>
+      <table class="level-table"><caption>Average level ${summary.meanLevel.toFixed(1)} / 5. These are this app's practice tiers.</caption>
+      <thead><tr><th scope="col">Level</th><th scope="col">Correct</th><th scope="col">Accuracy</th><th scope="col">Avg time</th></tr></thead>
+      <tbody>${summary.levels.map(r => `<tr><th scope="row">${r.level}</th><td>${r.correct} / ${r.total}</td><td>${r.total ? Math.round(100*r.correct/r.total)+"%" : "—"}</td><td>${r.total ? (r.used/r.total).toFixed(1)+"s" : "—"}</td></tr>`).join("")}</tbody></table>
+      <p>${escape(guidance.difficulty)}</p></section>
+      <section class="result-section" aria-labelledby="answerTitle"><h2 id="answerTitle">Review your answers</h2>
+        <p>Open any question. Switch between your submitted answer and the solution.</p>
+        <div id="answerReviews">${MMQReview.list(G.id, results)}</div>
+      </section>
+      <details class="methodology"><summary>How to read your score</summary>
+        <p><b>In this app:</b> each correct answer earns one point. Time is reported separately, with no speed bonus. Practice points add the difficulty level of each correct answer; the maximum is the sum of the levels you received.</p>
+        <p>A correct answer raises the next requested level by one; a miss lowers it by one, within levels 1–5. The table records the actual tier of each question. Tiers are authored for practice and have not been statistically calibrated.</p>
+        <p><b>Published MindmetriQ methodology:</b> calibrated Rasch scoring considers item difficulty; official percentiles depend on comparison groups. Adaptive selection targets roughly 70% correct. This is a design target, not a pass mark or percentile. Our raw scores and practice points cannot be converted to official results.</p>
+        <p>Sources: <a href="https://www.testpartnership.com/fact-sheets/MindmetriQ-Technical-Manual.pdf#page=29" target="_blank" rel="noopener">Technical manual: scoring, adaptive targeting and norms</a> · <a href="https://www.testpartnership.com/gamified-assessment.html" target="_blank" rel="noopener">Published game tasks</a></p>
+      </details>
       <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
       <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
+    MMQReview.bind($("#answerReviews"), G.id, results);
     $("#again").onclick = () => start(mode.key);
     $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
     showHist("#histEnd");

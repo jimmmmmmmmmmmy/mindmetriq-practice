@@ -1,3 +1,6 @@
 __pycache__/
 .venv/
 node_modules/
+
+# Local screenshots stay private and are never published.
+/shots/
