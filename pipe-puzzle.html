@@ -42,192 +42,14 @@ a.back{color:inherit;font-size:14px}
 .pc.sel{outline:4px solid #3a8ee6;outline-offset:-2px;z-index:2}
 .pc.cur{box-shadow:0 0 0 3px #f0b429}
 .pc.flow svg .ch{stroke:#bfe3ff}.pc.flow svg .chr{fill:#bfe3ff}
-</style></head><body><div id="app"></div><script>// Shared harness: screens, per-item timer, adaptive staircase, scoring, localStorage history.
-const H = (() => {
-  const $ = s => document.querySelector(s);
-  let G, mode, idx, level, results, tStart, tItemStart, limit, raf, itemDone, paused = false, pauseAt = 0, runStart;
-  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-  const pick = a => a[Math.floor(Math.random() * a.length)];
-  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-  const MODES = g => ({
-    test: { label: "Official-style test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
-    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 easy questions with feedback after each answer" },
-    hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
-  });
-  function init(game) {
-    G = game;
-    document.title = G.title + " practice";
-    document.documentElement.style.setProperty("--accent", G.accent);
-    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
-    const ms = MODES(G);
-    $("#app").innerHTML = `
-    <section class="screen on" id="sIntro"><div class="pad">
-      <a class="back" href="index.html">&larr; All games</a>
-      <div style="height:24px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
-      <div class="rules">${G.rules}</div>
-      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
-      <div class="hist" id="histIntro"></div>
-      <div class="note">Unofficial practice mock. Item content is generated, not the real item bank.</div>
-    </div></section>
-    <section class="screen" id="sGame">
-      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
-      <div class="tbar"><div id="hBar"></div></div>
-      <div id="stage"></div>
-      <div class="flash" id="flash"><span></span></div>
-      <div class="foot" id="foot"></div>
-    </section>
-    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
-    document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
-    showHist("#histIntro");
-    G.setup($("#stage"), $("#foot"));
-    window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && !itemDone && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
-  }
-  function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
-  function start(m) {
-    mode = Object.assign({ key: m }, MODES(G)[m]); idx = 0; level = mode.start; results = []; runStart = performance.now();
-    $("#hTot").textContent = mode.n; $("#hMode").textContent = m === "practice" ? "Practice" : m === "hard" ? "Hard drill" : G.title;
-    if (G.onStart) G.onStart(mode);
-    show("sGame"); next();
-  }
-  function next() {
-    if (idx >= mode.n) return end();
-    $("#hNum").textContent = idx + 1; itemDone = false; paused = false;
-    const item = G.newItem(level);
-    G.render(item);
-    tItemStart = performance.now();
-    limit = G.perItem ? G.perItem * mode.timer * (G.timeFactor ? G.timeFactor(item) : 1) : 0;
-    cancelAnimationFrame(raf); tick();
-  }
-  function elapsed() { return ((paused ? pauseAt : performance.now()) - tItemStart) / 1000; }
-  function tick() {
-    if (itemDone) return;
-    const e = elapsed();
-    if (limit) {
-      const left = Math.max(0, limit - e);
-      $("#hTime").textContent = Math.ceil(left);
-      $("#hBar").style.width = (100 * left / limit) + "%";
-      if (left <= 0) { const r = G.timeout ? G.timeout() : { correct: false, note: "Time ran out" }; r.timedOut = true; answer(r.correct, r); return; }
-    } else if (G.progress) { $("#hBar").style.width = (100 * (1 - G.progress())) + "%"; $("#hTime").textContent = ""; }
-    raf = requestAnimationFrame(tick);
-  }
-  function addTime(s) { limit += s; }
-  function pause() { if (!paused) { paused = true; pauseAt = performance.now(); } }
-  function resume() { if (paused) { tItemStart += performance.now() - pauseAt; paused = false; } }
-  function answer(correct, info = {}) {
-    if (itemDone) return; itemDone = true; cancelAnimationFrame(raf);
-    const used = Math.min(elapsed(), limit || 1e9);
-    results.push({ correct: !!correct, used, level, info });
-    const fb = mode.feedback;
-    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
-    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
-    idx++;
-    setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
-  }
-  function flash(t, cls, ms) {
-    const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
-    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
-  }
-  function key() { return "mmq_hist_" + G.id; }
-  function hist() { try { return JSON.parse(localStorage.getItem(key()) || "[]"); } catch (e) { return []; } }
-  function showHist(sel) {
-    const h = hist(); const el = document.querySelector(sel); if (!el) return;
-    if (!h.length) { el.innerHTML = ""; return; }
-    const best = h.filter(r => r.mode !== "practice").reduce((b, r) => (!b || r.score > b.score || (r.score === b.score && r.time < b.time)) ? r : b, null);
-    el.innerHTML = `<h2 style="font-size:18px;margin-top:18px">Your history</h2>` +
-      (best ? `<div>Best: <b>${best.score}/${best.total}</b> (${best.mode}, ${new Date(best.date).toLocaleDateString()})</div>` : "") +
-      `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
-  }
-  function end() {
-    const n = results.length, c = results.filter(r => r.correct).length;
-    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
-    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
-    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
-    try { const h = hist(); h.push(rec); localStorage.setItem(key(), JSON.stringify(h.slice(-50))); } catch (e) {}
-    $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
-      <div class="stat">
-        <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
-        <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
-        <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
-        <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
-        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
-        <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
-      </div>
-      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
-      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
-      <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
-      <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
-    $("#again").onclick = () => start(mode.key);
-    $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
-    showHist("#histEnd");
-    show("sEnd");
-    window.__lastResult = rec;
-  }
-  return { init, answer, addTime, pause, resume, flash, rnd, pick, shuffle, get mode() { return mode; }, get done() { return itemDone; } };
-})();
+</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const D = [[0,-1,1],[1,0,2],[0,1,4],[-1,0,8]]; // dx, dy, bit (N,E,S,W)
-const OPP = { 1: 4, 2: 8, 4: 1, 8: 2 };
 let it, N, cellEls, sel = -1, cur = 0, gridEl, dragFrom = -1;
 // Cell: {t:'p'|'o'|'x'|'e', m:mask}. 'p' pipe (swappable), 'o' empty floor (swappable), 'x' fixed block, 'e' fixed pipe end.
-function genPath(N, s, t, minLen) {
-  for (let a = 0; a < 400; a++) {
-    const path = [s], seen = new Set([s]);
-    const ok = (function dfs(c) {
-      if (c === t) return path.length >= minLen;
-      if (path.length > N * N * .75) return false;
-      const x = c % N, y = (c / N) | 0;
-      for (const [dx, dy] of H.shuffle(D)) { const nx = x + dx, ny = y + dy, n = ny * N + nx; if (nx < 0 || ny < 0 || nx >= N || ny >= N || seen.has(n)) continue;
-        if (n !== t && path.length + 1 < minLen && Math.random() < .1) continue;
-        seen.add(n); path.push(n); if (dfs(n)) return true; path.pop(); }
-      return false;
-    })(s);
-    if (ok) return path;
-  }
-  return null;
-}
-const bitTo = (a, b, N) => { const dx = b % N - a % N, dy = ((b / N) | 0) - ((a / N) | 0); return D.find(d => d[0] === dx && d[1] === dy)[2]; };
-function connected(cells, s, N) {
-  let c = s, out = cells[s].m, steps = 0;
-  while (steps++ < N * N + 2) {
-    const d = D.find(q => q[2] === out), x = c % N + d[0], y = ((c / N) | 0) + d[1];
-    if (x < 0 || y < 0 || x >= N || y >= N) return false;
-    const n = y * N + x, cell = cells[n];
-    if (!(cell.m & OPP[out])) return false;
-    if (cell.t === "e") return n !== s;
-    if (cell.t !== "p") return false;
-    out = cell.m & ~OPP[out]; c = n;
-  }
-  return false;
-}
-function newItem(level) {
-  N = level >= 5 ? 6 : 5;
-  for (;;) {
-    const border = []; for (let i = 0; i < N * N; i++) { const x = i % N, y = (i / N) | 0; if (x === 0 || y === 0 || x === N - 1 || y === N - 1) border.push(i); }
-    const s = H.pick(border), t = H.pick(border);
-    const dist = Math.abs(s % N - t % N) + Math.abs(((s / N) | 0) - ((t / N) | 0));
-    if (dist < 3) continue;
-    const path = genPath(N, s, t, Math.min(dist + 1 + 2 * (level - 1), N * N - 6)); if (!path) continue;
-    const cells = Array.from({ length: N * N }, () => ({ t: "o", m: 0 }));
-    path.forEach((c, k) => { let m = 0; if (k > 0) m |= bitTo(c, path[k - 1], N); if (k < path.length - 1) m |= bitTo(c, path[k + 1], N); cells[c] = { t: k === 0 || k === path.length - 1 ? "e" : "p", m }; });
-    const need = {}; path.forEach(c => need[c] = cells[c].m);
-    const free = H.shuffle([...cells.keys()].filter(i => cells[i].t === "o"));
-    const nObs = H.rnd(1, 2 + level), nExtra = H.rnd(0, Math.max(0, level - 2));
-    free.slice(0, nObs).forEach(i => cells[i] = { t: "x", m: 0 });
-    const PIPES = [5, 10, 3, 6, 12, 9];
-    free.slice(nObs, nObs + nExtra).forEach(i => cells[i] = { t: "p", m: H.pick(PIPES) });
-    // Scramble with random swaps among movable cells (each swap moves at least one pipe).
-    const mov = [...cells.keys()].filter(i => cells[i].t === "p" || cells[i].t === "o");
-    const pipes = () => mov.filter(i => cells[i].t === "p");
-    const nSwaps = [2, 3, 4, 6, 8][level - 1];
-    for (let k = 0; k < nSwaps; k++) { const a = H.pick(pipes()), b = H.pick(mov.filter(i => i !== a && !(cells[i].t === "p" && cells[i].m === cells[a].m))); if (b === undefined) continue; [cells[a], cells[b]] = [cells[b], cells[a]]; }
-    if (connected(cells, s, N)) continue;
-    return { N, cells, s, t, path, need };
-  }
-}
+const newItem = level => MMQLogic.pipes.newItem(level);
+const connected = MMQLogic.pipes.connected;
 function tileSVG(c) {
   if (c.t === "o" || c.t === "x") return "";
   let p = ""; D.forEach(([dx, dy, b]) => { if (c.m & b) p += `<line class="ch" x1="50" y1="50" x2="${50 + dx * 52}" y2="${50 + dy * 52}" stroke="#fff" stroke-width="30" stroke-linecap="butt"/>`; });
@@ -250,6 +72,7 @@ function tap(i) {
   swap(sel, i);
 }
 function swap(a, b) {
+  if (H.done || a === b || !movable(a) || !movable(b)) return;
   const c = it.cells; [c[a], c[b]] = [c[b], c[a]]; sel = -1; it.swaps++;
   if (connected(c, it.s, N)) { draw(true); H.answer(true, { delay: 300 }); } else draw();
 }
@@ -258,11 +81,13 @@ function setup(stage, foot) {
   gridEl = stage.querySelector("#pg"); cellEls = [];
   foot.innerHTML = `<span style="font-size:13px;opacity:.65;margin-right:auto">Tap two tiles to swap (or drag one onto another). It's checked automatically.</span>`;
   const idxAt = e => { const el = document.elementFromPoint(e.clientX, e.clientY); const pc = el && el.closest(".pc"); return pc ? +pc.dataset.i : -1; };
-  gridEl.addEventListener("pointerdown", e => { kb = false; const i = idxAt(e); if (i < 0) return; dragFrom = i; gridEl.setPointerCapture(e.pointerId); });
-  gridEl.addEventListener("pointerup", e => { const i = idxAt(e), f = dragFrom; dragFrom = -1; if (i < 0 || f < 0) return;
+  gridEl.addEventListener("pointerdown", e => { if (H.done) return; kb = false; const i = idxAt(e); if (i < 0) return; dragFrom = i; gridEl.setPointerCapture(e.pointerId); });
+  gridEl.addEventListener("pointerup", e => { if (H.done) { dragFrom = -1; return; } const i = idxAt(e), f = dragFrom; dragFrom = -1; if (i < 0 || f < 0) return;
     if (i !== f && movable(f) && movable(i)) { sel = -1; swap(f, i); } else if (i === f) tap(i); });
+  gridEl.addEventListener("pointercancel", () => { dragFrom = -1; });
+  gridEl.addEventListener("lostpointercapture", () => { dragFrom = -1; });
 }
-function render(item) { it = item; it.swaps = 0; sel = -1; cur = 0; draw(); }
+function render(item) { N = item.N; dragFrom = -1; it = item; it.swaps = 0; sel = -1; cur = 0; draw(); }
 H.init({ id: "pipes", title: "Pipe Puzzle", cat: "Logical Reasoning", accent: "#4e7590", bg: "#eef1f4", items: 10, perItem: 20, timerText: "20 s per question",
   rules: `<p>Swap the pipes until the two dark pipe ends are connected.</p>
   <ul><li>Only the blue pipe tiles (and empty floor tiles) can be swapped. The dark pipe ends and the grey blocks are fixed in place.</li><li>Pipes can't be rotated, so look at the shape each gap needs.</li>
@@ -271,7 +96,7 @@ H.init({ id: "pipes", title: "Pipe Puzzle", cat: "Logical Reasoning", accent: "#
   setup, newItem, render, timeout: () => ({ correct: false, note: "the ends weren't connected in time" }),
   key: e => { const m = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -N, ArrowDown: N }[e.key]; kb = true;
     if (m) { const n = cur + m; if (n >= 0 && n < N * N && !(Math.abs(m) === 1 && ((n / N) | 0) !== ((cur / N) | 0))) cur = n; draw(); } else if (e.key === "Enter" || e.key === " ") tap(cur); } });
-window.__game = { get item() { return it; }, swap, tap, connected: () => connected(it.cells, it.s, N),
+if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, swap, tap, connected: () => connected(it.cells, it.s, N),
   // test helper: solve by placing correct pipe types onto path cells
   solve() { const c = it.cells; for (const p of it.path.slice(1, -1)) { if (c[p].t === "p" && c[p].m === it.need[p]) continue; const j = c.findIndex((q, k) => q.t === "p" && q.m === it.need[p] && !(it.path.includes(k) && c[k].m === it.need[k])); if (j >= 0) swap(p, j); if (H.done) return; } } };
 })();

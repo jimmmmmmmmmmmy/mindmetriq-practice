@@ -36,158 +36,24 @@ a.back{color:inherit;font-size:14px}
 
 canvas{display:block;width:100%;height:100%;touch-action:none}
 .ctl{flex:1;font-size:26px;padding:14px 0;user-select:none;-webkit-user-select:none;touch-action:none}
-</style></head><body><div id="app"></div><script>// Shared harness: screens, per-item timer, adaptive staircase, scoring, localStorage history.
-const H = (() => {
-  const $ = s => document.querySelector(s);
-  let G, mode, idx, level, results, tStart, tItemStart, limit, raf, itemDone, paused = false, pauseAt = 0, runStart;
-  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-  const pick = a => a[Math.floor(Math.random() * a.length)];
-  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-  const MODES = g => ({
-    test: { label: "Official-style test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
-    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 easy questions with feedback after each answer" },
-    hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
-  });
-  function init(game) {
-    G = game;
-    document.title = G.title + " practice";
-    document.documentElement.style.setProperty("--accent", G.accent);
-    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
-    const ms = MODES(G);
-    $("#app").innerHTML = `
-    <section class="screen on" id="sIntro"><div class="pad">
-      <a class="back" href="index.html">&larr; All games</a>
-      <div style="height:24px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
-      <div class="rules">${G.rules}</div>
-      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
-      <div class="hist" id="histIntro"></div>
-      <div class="note">Unofficial practice mock. Item content is generated, not the real item bank.</div>
-    </div></section>
-    <section class="screen" id="sGame">
-      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
-      <div class="tbar"><div id="hBar"></div></div>
-      <div id="stage"></div>
-      <div class="flash" id="flash"><span></span></div>
-      <div class="foot" id="foot"></div>
-    </section>
-    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
-    document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
-    showHist("#histIntro");
-    G.setup($("#stage"), $("#foot"));
-    window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && !itemDone && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
-  }
-  function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
-  function start(m) {
-    mode = Object.assign({ key: m }, MODES(G)[m]); idx = 0; level = mode.start; results = []; runStart = performance.now();
-    $("#hTot").textContent = mode.n; $("#hMode").textContent = m === "practice" ? "Practice" : m === "hard" ? "Hard drill" : G.title;
-    if (G.onStart) G.onStart(mode);
-    show("sGame"); next();
-  }
-  function next() {
-    if (idx >= mode.n) return end();
-    $("#hNum").textContent = idx + 1; itemDone = false; paused = false;
-    const item = G.newItem(level);
-    G.render(item);
-    tItemStart = performance.now();
-    limit = G.perItem ? G.perItem * mode.timer * (G.timeFactor ? G.timeFactor(item) : 1) : 0;
-    cancelAnimationFrame(raf); tick();
-  }
-  function elapsed() { return ((paused ? pauseAt : performance.now()) - tItemStart) / 1000; }
-  function tick() {
-    if (itemDone) return;
-    const e = elapsed();
-    if (limit) {
-      const left = Math.max(0, limit - e);
-      $("#hTime").textContent = Math.ceil(left);
-      $("#hBar").style.width = (100 * left / limit) + "%";
-      if (left <= 0) { const r = G.timeout ? G.timeout() : { correct: false, note: "Time ran out" }; r.timedOut = true; answer(r.correct, r); return; }
-    } else if (G.progress) { $("#hBar").style.width = (100 * (1 - G.progress())) + "%"; $("#hTime").textContent = ""; }
-    raf = requestAnimationFrame(tick);
-  }
-  function addTime(s) { limit += s; }
-  function pause() { if (!paused) { paused = true; pauseAt = performance.now(); } }
-  function resume() { if (paused) { tItemStart += performance.now() - pauseAt; paused = false; } }
-  function answer(correct, info = {}) {
-    if (itemDone) return; itemDone = true; cancelAnimationFrame(raf);
-    const used = Math.min(elapsed(), limit || 1e9);
-    results.push({ correct: !!correct, used, level, info });
-    const fb = mode.feedback;
-    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
-    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
-    idx++;
-    setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
-  }
-  function flash(t, cls, ms) {
-    const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
-    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
-  }
-  function key() { return "mmq_hist_" + G.id; }
-  function hist() { try { return JSON.parse(localStorage.getItem(key()) || "[]"); } catch (e) { return []; } }
-  function showHist(sel) {
-    const h = hist(); const el = document.querySelector(sel); if (!el) return;
-    if (!h.length) { el.innerHTML = ""; return; }
-    const best = h.filter(r => r.mode !== "practice").reduce((b, r) => (!b || r.score > b.score || (r.score === b.score && r.time < b.time)) ? r : b, null);
-    el.innerHTML = `<h2 style="font-size:18px;margin-top:18px">Your history</h2>` +
-      (best ? `<div>Best: <b>${best.score}/${best.total}</b> (${best.mode}, ${new Date(best.date).toLocaleDateString()})</div>` : "") +
-      `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
-  }
-  function end() {
-    const n = results.length, c = results.filter(r => r.correct).length;
-    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
-    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
-    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
-    try { const h = hist(); h.push(rec); localStorage.setItem(key(), JSON.stringify(h.slice(-50))); } catch (e) {}
-    $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
-      <div class="stat">
-        <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
-        <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
-        <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
-        <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
-        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
-        <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
-      </div>
-      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
-      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
-      <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
-      <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
-    $("#again").onclick = () => start(mode.key);
-    $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
-    showHist("#histEnd");
-    show("sEnd");
-    window.__lastResult = rec;
-  }
-  return { init, answer, addTime, pause, resume, flash, rnd, pick, shuffle, get mode() { return mode; }, get done() { return itemDone; } };
-})();
+</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const W = 360, HH = 560, L = 54, R = 306, BS = 34, CW = 40, CARY = HH - 50;
-let it, cv, ctx, raf, last, keys = { l: 0, r: 0 }, t0;
-function newItem(level) {
-  const n = [5, 6, 6, 7, 8][level - 1], neg = level >= 2, mag = [6, 7, 9, 9, 12][level - 1];
-  for (;;) {
-    const nums = Array.from({ length: n }, () => { let v = H.rnd(1, mag); if (neg && Math.random() < .18 + .06 * level) v = -v; return v; });
-    const k = H.rnd(2, Math.min(n - 2, 2 + Math.floor(level / 2)));
-    const idx = H.shuffle([...nums.keys()]).slice(0, k);
-    const target = idx.reduce((s, i) => s + nums[i], 0);
-    if (target === 0 || Math.abs(target) > 25) continue;
-    if (nums.reduce((s, v) => s + v, 0) === target) continue; // catching everything must not be a solution
-    return { nums, target, sol: idx.sort((a, b) => a - b), fallT: (2.0 - .15 * level) * (H.mode ? H.mode.timer : 1), plan: 5 };
-  }
-}
+let it, cv, ctx, raf, keys = { l: 0, r: 0 };
+const newItem = level => MMQLogic.racer.newItem(level, H.mode.timer);
 function setup(stage, foot) {
   stage.innerHTML = `<div style="flex:1;position:relative"><canvas id="cv"></canvas></div>`;
   foot.innerHTML = `<button class="btn ctl" id="bl">&#9664;</button><button class="btn ctl" id="br">&#9654;</button>`;
   cv = stage.querySelector("#cv"); ctx = cv.getContext("2d");
-  const hold = (el, k) => { el.addEventListener("pointerdown", e => { e.preventDefault(); keys[k] = 1; el.setPointerCapture(e.pointerId); });
+  const hold = (el, k) => { el.addEventListener("pointerdown", e => { e.preventDefault(); if (H.done) return; keys[k] = 1; el.setPointerCapture(e.pointerId); });
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(ev => el.addEventListener(ev, () => keys[k] = 0)); };
   hold(foot.querySelector("#bl"), "l"); hold(foot.querySelector("#br"), "r");
   // Touch/hold on left or right half of the track also steers.
-  cv.addEventListener("pointerdown", e => { const b = cv.getBoundingClientRect(); const k = e.clientX < b.left + b.width / 2 ? "l" : "r"; keys[k] = 1; cv.setPointerCapture(e.pointerId); cv._k = k; });
-  ["pointerup", "pointercancel"].forEach(ev => cv.addEventListener(ev, () => { if (cv._k) keys[cv._k] = 0; cv._k = null; }));
+  cv.addEventListener("pointerdown", e => { if (H.done) return; const b = cv.getBoundingClientRect(); const k = e.clientX < b.left + b.width / 2 ? "l" : "r"; keys[k] = 1; cv.setPointerCapture(e.pointerId); cv._k = k; });
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach(ev => cv.addEventListener(ev, () => { if (cv._k) keys[cv._k] = 0; cv._k = null; }));
   window.addEventListener("keyup", e => { if (e.key === "ArrowLeft") keys.l = 0; if (e.key === "ArrowRight") keys.r = 0; });
+  window.addEventListener("blur", () => { keys.l = keys.r = 0; });
   window.addEventListener("resize", fit);
 }
 function fit() { const p = cv.parentElement, s = Math.min(p.clientWidth / W, p.clientHeight / HH) || 1, dpr = window.devicePixelRatio || 1;
@@ -195,25 +61,15 @@ function fit() { const p = cv.parentElement, s = Math.min(p.clientWidth / W, p.c
 function render(item) {
   it = item; it.car = (L + R) / 2; it.t = 0; it.i = -1; it.got = []; it.block = null; it.done = false; keys.l = keys.r = 0;
   it.total = it.plan + it.nums.length * it.fallT;
-  fit(); cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
+  fit(); cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
 }
 function block(x, y, v, c) { ctx.fillStyle = c || (v < 0 ? "#3b2b2c" : "#a35f5f"); ctx.fillRect(x - BS / 2, y - BS / 2, BS, BS); ctx.fillStyle = "#fff"; ctx.font = "17px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(v, x, y + 1); }
-function loop(now) {
-  const dt = Math.min(.05, (now - last) / 1000); last = now;
-  if (H.done && !it.done) return;
-  it.t += dt;
-  const sp = 330; it.car = Math.max(L + CW / 2, Math.min(R - CW / 2, it.car + (keys.r - keys.l) * sp * dt));
-  if (it.t >= it.plan) {
-    const k = Math.floor((it.t - it.plan) / it.fallT);
-    if (k !== it.i && k < it.nums.length) { it.i = k; it.block = { v: it.nums[k], x: H.rnd(L + BS / 2 + 2, R - BS / 2 - 2), hit: false }; }
-    if (it.block && !it.block.hit) {
-      const f = ((it.t - it.plan) % it.fallT) / it.fallT; it.block.y = -BS + f * (CARY + BS);
-      if (it.block.y + BS / 2 >= CARY - 22 && it.block.y - BS / 2 <= CARY + 10 && Math.abs(it.block.x - it.car) < (BS + CW) / 2 - 4) { it.block.hit = true; it.got.push(it.i); }
-    }
-    if (it.t - it.plan >= it.nums.length * it.fallT) return finish();
-  }
+function loop() {
+  if (H.done) return;
+  if (MMQLogic.racer.advance(it, H.elapsed(), keys)) return finish();
   drawScene(); raf = requestAnimationFrame(loop);
 }
+function stop() { cancelAnimationFrame(raf); keys.l = keys.r = 0; }
 function drawScene() {
   ctx.clearRect(0, 0, W, HH); ctx.fillStyle = "#f8f5f3"; ctx.fillRect(0, 0, W, HH);
   ctx.strokeStyle = "#d4cdca"; ctx.beginPath(); ctx.moveTo(L, 0); ctx.lineTo(L, HH); ctx.moveTo(R, 0); ctx.lineTo(R, HH); ctx.stroke();
@@ -230,18 +86,19 @@ function drawScene() {
   if (it.block && !it.block.hit) block(it.block.x, it.block.y, it.block.v);
   ctx.fillStyle = "#3a2b2c"; ctx.beginPath(); ctx.moveTo(it.car, CARY - 30); ctx.lineTo(it.car + CW / 2, CARY + 14); ctx.lineTo(it.car, CARY + 2); ctx.lineTo(it.car - CW / 2, CARY + 14); ctx.closePath(); ctx.fill();
 }
-function finish() {
-  it.done = true; it.block = null; drawScene();
+function result() {
+  it.done = true; it.block = null; it.t = it.total; it.i = it.nums.length - 1; drawScene();
   const s = it.got.reduce((a, i) => a + it.nums[i], 0);
-  H.answer(s === it.target, { note: `you collected ${it.got.length ? it.got.map(i => it.nums[i]).join(" + ") + " = " + s : "nothing"}; one solution: ${it.sol.map(i => it.nums[i]).join(" + ")} = ${it.target}` });
+  return { correct: s === it.target, note: `you collected ${it.got.length ? it.got.map(i => it.nums[i]).join(" + ") + " = " + s : "nothing"}; one solution: ${it.sol.map(i => it.nums[i]).join(" + ")} = ${it.target}` };
 }
-H.init({ id: "racer", title: "Number Racer", cat: "Numerical Reasoning", accent: "#8f3b3b", items: 12, perItem: 0, timerText: "5 s planning + about 9–10 s of falling numbers per round",
+function finish() { const r = result(); H.answer(r.correct, r); }
+H.init({ id: "racer", title: "Number Racer", cat: "Numerical Reasoning", accent: "#8f3b3b", items: 12, perItem: 0, itemLimit: item => item.plan + item.nums.length * item.fallT, timerText: "5 s planning + about 9–10 s of falling numbers per round",
   rules: `<p>Collect the falling numbers that add up to <b>exactly the target</b> (the number in the crosshair, top right). Avoid the rest.</p>
   <ul><li>Every number you collect is added to your total. The round ends once all the numbers have fallen.</li><li>There may be more than one way to reach the target. Negative numbers subtract.</li>
-  <li>You get 5 seconds at the start of each round to plan. The queue on the left falls from the bottom up, and the numbers you've collected stack up on the right.</li>
+  <li>In the timed test you get 5 seconds to plan. Hard drill reduces planning and falling time by 25%. The queue on the left falls from the bottom up, and the numbers you've collected stack up on the right.</li>
   <li>Controls: hold the ◀ ▶ buttons, hold the left or right half of the track, or hold the ← → keys. You collect a number by touching its block.</li></ul>`,
-  setup, newItem, render, progress: () => it ? Math.min(1, it.t / it.total) : 0,
+  setup, newItem, render, stop, timeout: result,
   key: e => { if (e.key === "ArrowLeft") keys.l = 1; else if (e.key === "ArrowRight") keys.r = 1; } });
-window.__game = { get item() { return it; }, keys };
+if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, keys };
 })();
 </script></body></html>

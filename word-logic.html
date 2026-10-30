@@ -41,143 +41,12 @@ a.back{color:inherit;font-size:14px}
 .boosts{display:flex;justify-content:space-between;padding:18px 16px 4px}
 .boost{background:#efe6c4;border:1px solid #c9bd8d;padding:8px 16px;font-size:14px;cursor:pointer;border-radius:2px}
 .boost:disabled{opacity:.3;cursor:default}
-</style></head><body><div id="app"></div><script>// Shared harness: screens, per-item timer, adaptive staircase, scoring, localStorage history.
-const H = (() => {
-  const $ = s => document.querySelector(s);
-  let G, mode, idx, level, results, tStart, tItemStart, limit, raf, itemDone, paused = false, pauseAt = 0, runStart;
-  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-  const pick = a => a[Math.floor(Math.random() * a.length)];
-  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-  const MODES = g => ({
-    test: { label: "Official-style test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
-    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 easy questions with feedback after each answer" },
-    hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
-  });
-  function init(game) {
-    G = game;
-    document.title = G.title + " practice";
-    document.documentElement.style.setProperty("--accent", G.accent);
-    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
-    const ms = MODES(G);
-    $("#app").innerHTML = `
-    <section class="screen on" id="sIntro"><div class="pad">
-      <a class="back" href="index.html">&larr; All games</a>
-      <div style="height:24px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
-      <div class="rules">${G.rules}</div>
-      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
-      <div class="hist" id="histIntro"></div>
-      <div class="note">Unofficial practice mock. Item content is generated, not the real item bank.</div>
-    </div></section>
-    <section class="screen" id="sGame">
-      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
-      <div class="tbar"><div id="hBar"></div></div>
-      <div id="stage"></div>
-      <div class="flash" id="flash"><span></span></div>
-      <div class="foot" id="foot"></div>
-    </section>
-    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
-    document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
-    showHist("#histIntro");
-    G.setup($("#stage"), $("#foot"));
-    window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && !itemDone && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
-  }
-  function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
-  function start(m) {
-    mode = Object.assign({ key: m }, MODES(G)[m]); idx = 0; level = mode.start; results = []; runStart = performance.now();
-    $("#hTot").textContent = mode.n; $("#hMode").textContent = m === "practice" ? "Practice" : m === "hard" ? "Hard drill" : G.title;
-    if (G.onStart) G.onStart(mode);
-    show("sGame"); next();
-  }
-  function next() {
-    if (idx >= mode.n) return end();
-    $("#hNum").textContent = idx + 1; itemDone = false; paused = false;
-    const item = G.newItem(level);
-    G.render(item);
-    tItemStart = performance.now();
-    limit = G.perItem ? G.perItem * mode.timer * (G.timeFactor ? G.timeFactor(item) : 1) : 0;
-    cancelAnimationFrame(raf); tick();
-  }
-  function elapsed() { return ((paused ? pauseAt : performance.now()) - tItemStart) / 1000; }
-  function tick() {
-    if (itemDone) return;
-    const e = elapsed();
-    if (limit) {
-      const left = Math.max(0, limit - e);
-      $("#hTime").textContent = Math.ceil(left);
-      $("#hBar").style.width = (100 * left / limit) + "%";
-      if (left <= 0) { const r = G.timeout ? G.timeout() : { correct: false, note: "Time ran out" }; r.timedOut = true; answer(r.correct, r); return; }
-    } else if (G.progress) { $("#hBar").style.width = (100 * (1 - G.progress())) + "%"; $("#hTime").textContent = ""; }
-    raf = requestAnimationFrame(tick);
-  }
-  function addTime(s) { limit += s; }
-  function pause() { if (!paused) { paused = true; pauseAt = performance.now(); } }
-  function resume() { if (paused) { tItemStart += performance.now() - pauseAt; paused = false; } }
-  function answer(correct, info = {}) {
-    if (itemDone) return; itemDone = true; cancelAnimationFrame(raf);
-    const used = Math.min(elapsed(), limit || 1e9);
-    results.push({ correct: !!correct, used, level, info });
-    const fb = mode.feedback;
-    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
-    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
-    idx++;
-    setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
-  }
-  function flash(t, cls, ms) {
-    const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
-    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
-  }
-  function key() { return "mmq_hist_" + G.id; }
-  function hist() { try { return JSON.parse(localStorage.getItem(key()) || "[]"); } catch (e) { return []; } }
-  function showHist(sel) {
-    const h = hist(); const el = document.querySelector(sel); if (!el) return;
-    if (!h.length) { el.innerHTML = ""; return; }
-    const best = h.filter(r => r.mode !== "practice").reduce((b, r) => (!b || r.score > b.score || (r.score === b.score && r.time < b.time)) ? r : b, null);
-    el.innerHTML = `<h2 style="font-size:18px;margin-top:18px">Your history</h2>` +
-      (best ? `<div>Best: <b>${best.score}/${best.total}</b> (${best.mode}, ${new Date(best.date).toLocaleDateString()})</div>` : "") +
-      `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
-  }
-  function end() {
-    const n = results.length, c = results.filter(r => r.correct).length;
-    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
-    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
-    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
-    try { const h = hist(); h.push(rec); localStorage.setItem(key(), JSON.stringify(h.slice(-50))); } catch (e) {}
-    $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
-      <div class="stat">
-        <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
-        <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
-        <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
-        <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
-        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
-        <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
-      </div>
-      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
-      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
-      <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
-      <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
-    $("#again").onclick = () => start(mode.key);
-    $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
-    showHist("#histEnd");
-    show("sEnd");
-    window.__lastResult = rec;
-  }
-  return { init, answer, addTime, pause, resume, flash, rnd, pick, shuffle, get mode() { return mode; }, get done() { return itemDone; } };
-})();
+</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/verbal-data.js"></script><script src="js/verbal-logic.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
-// Analogy bank: [difficulty 1-5, A, B, C, answer, [4 distractors]]. Written for this mock, except item "Tip/Advise" which is the public demo example.
-const BANK = [[1, "Up", "Down", "Left", "Right", ["Paint", "Eat", "Orca", "Sadness"]], [1, "Hot", "Cold", "Wet", "Dry", ["Rain", "Warm", "Water", "Damp"]], [1, "Puppy", "Dog", "Kitten", "Cat", ["Mouse", "Milk", "Kitchen", "Lion"]], [1, "Bird", "Nest", "Bee", "Hive", ["Honey", "Sting", "Flower", "Wasp"]], [1, "Foot", "Shoe", "Hand", "Glove", ["Finger", "Sock", "Arm", "Ring"]], [1, "Day", "Night", "Summer", "Winter", ["Sun", "Autumn", "Holiday", "Beach"]], [1, "Pen", "Write", "Knife", "Cut", ["Fork", "Sharp", "Kitchen", "Steel"]], [1, "Fish", "Swim", "Bird", "Fly", ["Feather", "Nest", "Sky", "Worm"]], [1, "Eye", "See", "Ear", "Hear", ["Sound", "Head", "Music", "Nose"]], [1, "Car", "Road", "Boat", "Water", ["Sail", "Captain", "Harbour", "Engine"]], [1, "Big", "Small", "Tall", "Short", ["Giant", "High", "Wide", "Long"]], [1, "Cow", "Milk", "Hen", "Egg", ["Farm", "Chick", "Feather", "Corn"]], [1, "Teacher", "School", "Doctor", "Hospital", ["Nurse", "Medicine", "Patient", "Illness"]], [1, "Book", "Read", "Song", "Sing", ["Music", "Radio", "Note", "Voice"]], [1, "Ice", "Cold", "Fire", "Hot", ["Smoke", "Wood", "Burn", "Red"]], [2, "Tip", "Advise", "Remember", "Recall", ["Forget", "Envisage", "Imagine", "Yearn"]], [2, "Author", "Novel", "Composer", "Symphony", ["Orchestra", "Piano", "Conductor", "Melody"]], [2, "Hungry", "Eat", "Tired", "Sleep", ["Bed", "Yawn", "Night", "Weak"]], [2, "Seed", "Tree", "Egg", "Bird", ["Shell", "Nest", "Yolk", "Hen"]], [2, "Painter", "Brush", "Sculptor", "Chisel", ["Statue", "Marble", "Gallery", "Paint"]], [2, "Glove", "Hand", "Helmet", "Head", ["Hat", "Soldier", "Hard", "Bike"]], [2, "Wheel", "Car", "Wing", "Plane", ["Bird", "Pilot", "Fly", "Airport"]], [2, "Thermometer", "Temperature", "Clock", "Time", ["Hour", "Alarm", "Wall", "Hand"]], [2, "Chapter", "Book", "Scene", "Play", ["Actor", "Stage", "Theatre", "Script"]], [2, "Flock", "Sheep", "Pack", "Wolves", ["Bag", "Herd", "Hunt", "Den"]], [2, "Bread", "Baker", "Shoes", "Cobbler", ["Leather", "Laces", "Feet", "Shop"]], [2, "Library", "Books", "Museum", "Exhibits", ["Visitors", "Guide", "History", "Building"]], [2, "Begin", "End", "Arrive", "Depart", ["Reach", "Travel", "Station", "Journey"]], [2, "Water", "Thirst", "Food", "Hunger", ["Meal", "Plate", "Kitchen", "Cook"]], [2, "Petal", "Flower", "Page", "Book", ["Paper", "Word", "Library", "Author"]], [2, "Rain", "Flood", "Wind", "Hurricane", ["Breeze", "Cloud", "Kite", "Sail"]], [2, "Kilometre", "Distance", "Kilogram", "Mass", ["Gram", "Scale", "Heavy", "Pound"]], [2, "Lawyer", "Client", "Doctor", "Patient", ["Surgeon", "Hospital", "Medicine", "Nurse"]], [2, "Brave", "Cowardly", "Generous", "Mean", ["Kind", "Rich", "Giving", "Charity"]], [3, "Scarce", "Abundant", "Fragile", "Sturdy", ["Delicate", "Glass", "Broken", "Weak"]], [3, "Prologue", "Epilogue", "Overture", "Finale", ["Opera", "Interval", "Music", "Prelude"]], [3, "Drought", "Rain", "Famine", "Food", ["Hunger", "Desert", "Thirst", "Crop"]], [3, "Archive", "Documents", "Arsenal", "Weapons", ["Soldiers", "Football", "War", "Fortress"]], [3, "Cartographer", "Maps", "Lexicographer", "Dictionaries", ["Words", "Grammar", "Books", "Libraries"]], [3, "Mile", "Marathon", "Note", "Melody", ["Song", "Piano", "Letter", "Sound"]], [3, "Whisper", "Shout", "Trickle", "Torrent", ["Stream", "Drip", "River", "Leak"]], [3, "Cocoon", "Butterfly", "Bud", "Blossom", ["Stem", "Leaf", "Garden", "Root"]], [3, "Ignite", "Extinguish", "Inflate", "Deflate", ["Expand", "Balloon", "Tyre", "Air"]], [3, "Verdict", "Jury", "Diagnosis", "Doctor", ["Patient", "Illness", "Hospital", "Cure"]], [3, "Anchor", "Ship", "Root", "Tree", ["Branch", "Soil", "Leaf", "Trunk"]], [3, "Biography", "Life", "Obituary", "Death", ["Funeral", "Newspaper", "Grief", "Grave"]], [3, "Gale", "Breeze", "Downpour", "Drizzle", ["Storm", "Flood", "Umbrella", "Puddle"]], [3, "Telescope", "Distant", "Microscope", "Tiny", ["Lens", "Laboratory", "Cell", "Glass"]], [3, "Counterfeit", "Genuine", "Fictional", "Factual", ["Novel", "Story", "Fake", "Imaginary"]], [3, "Ladder", "Climb", "Bridge", "Cross", ["River", "Build", "Arch", "Tunnel"]], [3, "Harvest", "Crop", "Shear", "Wool", ["Sheep", "Scissors", "Farmer", "Knit"]], [3, "Prune", "Plum", "Raisin", "Grape", ["Wine", "Vine", "Currant", "Dried"]], [3, "Novice", "Expert", "Apprentice", "Master", ["Trainee", "Tradesman", "Craft", "Student"]], [4, "Ephemeral", "Lasting", "Candid", "Guarded", ["Honest", "Open", "Photograph", "Frank"]], [4, "Cacophony", "Sound", "Stench", "Smell", ["Perfume", "Nose", "Taste", "Odour"]], [4, "Benevolent", "Malicious", "Frugal", "Extravagant", ["Thrifty", "Careful", "Poor", "Saving"]], [4, "Quarry", "Stone", "Mine", "Ore", ["Shaft", "Miner", "Gold", "Dig"]], [4, "Sapling", "Oak", "Foal", "Horse", ["Pony", "Stable", "Mare", "Saddle"]], [4, "Laconic", "Words", "Frugal", "Money", ["Rich", "Poor", "Bank", "Careful"]], [4, "Insipid", "Flavour", "Monotonous", "Variety", ["Boring", "Tone", "Voice", "Repetition"]], [4, "Pilot", "Cockpit", "Surgeon", "Theatre", ["Scalpel", "Patient", "Hospital", "Operation"]], [4, "Abdicate", "Throne", "Resign", "Office", ["Job", "Letter", "Manager", "Leave"]], [4, "Vaccine", "Disease", "Insulation", "Heat", ["Wall", "Warm", "House", "Cold"]], [4, "Embargo", "Trade", "Curfew", "Movement", ["Night", "Police", "Law", "Siren"]], [4, "Fledgling", "Bird", "Cub", "Bear", ["Lion", "Den", "Fur", "Cave"]], [4, "Erode", "Coast", "Corrode", "Metal", ["Rust", "Acid", "Water", "Iron"]], [4, "Mitigate", "Worsen", "Placate", "Provoke", ["Calm", "Soothe", "Anger", "Pacify"]], [4, "Altimeter", "Height", "Odometer", "Distance", ["Speed", "Car", "Fuel", "Wheel"]], [4, "Diligent", "Lazy", "Meticulous", "Careless", ["Careful", "Neat", "Precise", "Detailed"]], [5, "Garrulous", "Taciturn", "Ostentatious", "Modest", ["Showy", "Wealthy", "Flamboyant", "Proud"]], [5, "Sycophant", "Flattery", "Charlatan", "Deception", ["Wealth", "Medicine", "Honesty", "Magic"]], [5, "Lethargic", "Energy", "Apathetic", "Interest", ["Bored", "Tired", "Emotion", "Sad"]], [5, "Ameliorate", "Improve", "Exacerbate", "Worsen", ["Annoy", "Exaggerate", "Reduce", "Heal"]], [5, "Verbose", "Concise", "Opaque", "Transparent", ["Dark", "Clouded", "Glass", "Window"]], [5, "Pariah", "Society", "Exile", "Homeland", ["Island", "Prison", "Traveller", "Border"]], [5, "Arid", "Moisture", "Destitute", "Wealth", ["Poverty", "Hunger", "Desert", "Charity"]], [5, "Hackneyed", "Originality", "Callous", "Sympathy", ["Cruel", "Rough", "Skin", "Hardness"]], [5, "Gregarious", "Company", "Avaricious", "Wealth", ["Generous", "Hungry", "Poverty", "Miser"]], [5, "Placid", "Turbulent", "Ephemeral", "Permanent", ["Brief", "Fleeting", "Temporary", "Summer"]], [5, "Myopic", "Foresight", "Callow", "Experience", ["Youthful", "Bald", "Naive", "Cruel"]], [5, "Chronometer", "Time", "Hygrometer", "Humidity", ["Weather", "Rain", "Pressure", "Water"]], [5, "Recalcitrant", "Obedient", "Prodigal", "Thrifty", ["Wasteful", "Son", "Return", "Generous"]]];
-let it, used = new Set(), sel = -1, boostsLeft = 3, optEls, boostEls;
-function newItem(level) {
-  let pool = BANK.filter((b, i) => !used.has(i) && Math.abs(b[0] - level) <= 1);
-  if (!pool.length) pool = BANK.filter((b, i) => !used.has(i));
-  if (!pool.length) { used.clear(); pool = BANK; }
-  const b = H.pick(pool); used.add(BANK.indexOf(b));
-  return { b, opts: H.shuffle([b[4], ...b[5]]) };
-}
+const verbal = MMQVerbal.create();
+let it, sel = -1, boostsLeft = 3, optEls, boostEls;
+const newItem = level => verbal.analogy(level);
 function setup(stage, foot) {
   stage.innerHTML = `<div class="q" id="q"></div><div class="opts" id="opts">${[0,1,2,3,4].map(i => `<div class="opt" data-i="${i}"></div>`).join("")}</div>
   <div class="boosts">${[0,1,2].map(i => `<button class="boost" data-b="${i}">+10s</button>`).join("")}</div>`;
@@ -186,19 +55,19 @@ function setup(stage, foot) {
   boostEls.forEach(b => b.onclick = boost);
   foot.innerHTML = `<span style="font-size:13px;opacity:.65;margin-right:auto">Tap a word · keys: ↑ ↓ Enter · Space = +10s</span>`;
 }
-function boost() { if (H.done || boostsLeft <= 0) return; boostsLeft--; H.addTime(10); drawBoosts(); H.flash("+10 seconds", "ok", 700); }
+function boost() { if (H.done || boostsLeft <= 0 || !H.addTime(10)) return; boostsLeft--; drawBoosts(); H.flash("+10 seconds", "ok", 700); }
 function drawBoosts() { boostEls.forEach((b, i) => b.disabled = i >= boostsLeft); }
 function draw(reveal) { optEls.forEach((o, i) => { o.textContent = it.opts[i]; o.className = "opt" + (i === sel ? " sel" : "") + (reveal && it.opts[i] === it.b[4] ? " right" : ""); }); }
 function render(item) { it = item; sel = -1; document.getElementById("q").textContent = `${it.b[1]} is to ${it.b[2]} as ${it.b[3]} is to`; draw(); drawBoosts(); }
-function submit() { if (H.done || sel < 0) return; const ok = it.opts[sel] === it.b[4]; if (H.mode.feedback) draw(true); H.answer(ok, { note: "answer: " + it.b[4] }); }
+function submit() { if (H.done || sel < 0) return; const ok = it.opts[sel] === it.b[4]; if (H.mode.feedback) draw(true); H.answer(ok, { note: "answer: " + it.b[4] + " (" + it.relation + ")" }); }
 H.init({ id: "wordlogic", title: "Word Logic", cat: "Verbal Reasoning", accent: "#6e5020", bg: "#f5f5f2", items: 15, perItem: 15, timerText: "15 s per question + three +10 s boosts",
   rules: `<p>Select the word that best completes the logical comparison.</p>
   <ul><li>First work out how the first pair of words is related, for example <i>Up</i> and <i>Down</i> are opposites. Then pick the word that relates to the third word the same way: <i>Left</i> → <b>Right</b>.</li>
   <li>You can add 10 seconds to your timer at any point, but only <b>3 times across the whole test</b>.</li>
   <li>Controls: tap a word. On a keyboard, use ↑ ↓ to highlight and Enter to answer. The Space bar adds 10 seconds.</li></ul>`,
-  setup, newItem, render, onStart: () => { used.clear(); boostsLeft = 3; },
-  timeout: () => { if (H.mode.feedback) draw(true); return { correct: false, note: "answer: " + it.b[4] }; },
-  key: e => { if (e.key === "ArrowDown") { sel = (sel + 1) % 5; draw(); } else if (e.key === "ArrowUp") { sel = (sel + 4) % 5; draw(); } else if (e.key === "Enter") submit(); else if (e.key === " ") boost(); } });
-window.__game = { get item() { return it; }, pick(word) { sel = it.opts.indexOf(word); draw(); submit(); }, boost, get boostsLeft() { return boostsLeft; } };
+  setup, newItem, render, onStart: () => { verbal.reset(); boostsLeft = 3; },
+  timeout: () => { if (H.mode.feedback) draw(true); return { correct: false, note: "answer: " + it.b[4] + " (" + it.relation + ")" }; },
+  key: e => { if (e.key === "ArrowDown") { sel = (sel + 1) % 5; draw(); } else if (e.key === "ArrowUp") { sel = sel < 0 ? 4 : (sel + 4) % 5; draw(); } else if (e.key === "Enter") submit(); else if (e.key === " ") boost(); } });
+if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, pick(word) { sel = it.opts.indexOf(word); draw(); submit(); }, boost, get boostsLeft() { return boostsLeft; } };
 })();
 </script></body></html>

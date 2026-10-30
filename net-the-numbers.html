@@ -42,167 +42,12 @@ a.back{color:inherit;font-size:14px}
 .cell.in:not(.p):not(.n){background:#e8c4c2}
 .cell.best{outline:3px dashed #2c6b37;outline-offset:-3px}
 .sumb{text-align:center;font-family:Georgia,serif;font-size:20px;height:28px;margin-top:8px}
-</style></head><body><div id="app"></div><script>// Shared harness: screens, per-item timer, adaptive staircase, scoring, localStorage history.
-const H = (() => {
-  const $ = s => document.querySelector(s);
-  let G, mode, idx, level, results, tStart, tItemStart, limit, raf, itemDone, paused = false, pauseAt = 0, runStart;
-  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-  const pick = a => a[Math.floor(Math.random() * a.length)];
-  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const fmt = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-  const MODES = g => ({
-    test: { label: "Official-style test", n: g.items, timer: 1, start: 2, feedback: false, desc: `${g.items} questions · ${g.timerText} · adaptive difficulty` },
-    practice: { label: "Practice round", n: 3, timer: 1, start: 1, feedback: true, desc: "3 easy questions with feedback after each answer" },
-    hard: { label: "Hard drill", n: g.items, timer: 0.75, start: 4, feedback: false, desc: `${g.items} questions · 25% less time · starts at the hardest levels` },
-  });
-  function init(game) {
-    G = game;
-    document.title = G.title + " practice";
-    document.documentElement.style.setProperty("--accent", G.accent);
-    if (G.bg) document.documentElement.style.setProperty("--bg", G.bg);
-    const ms = MODES(G);
-    $("#app").innerHTML = `
-    <section class="screen on" id="sIntro"><div class="pad">
-      <a class="back" href="index.html">&larr; All games</a>
-      <div style="height:24px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1>
-      <div class="rules">${G.rules}</div>
-      <div class="modes">${Object.entries(ms).map(([k, m]) => `<button class="btn ${k === "test" ? "primary" : ""}" data-mode="${k}">${m.label}<small>${m.desc}</small></button>`).join("")}</div>
-      <div class="hist" id="histIntro"></div>
-      <div class="note">Unofficial practice mock. Item content is generated, not the real item bank.</div>
-    </div></section>
-    <section class="screen" id="sGame">
-      <div class="hud"><span><b id="hNum">1</b> <span style="opacity:.6">of <span id="hTot">12</span></span></span><span class="ttl" id="hMode"></span><span id="hTime"></span></div>
-      <div class="tbar"><div id="hBar"></div></div>
-      <div id="stage"></div>
-      <div class="flash" id="flash"><span></span></div>
-      <div class="foot" id="foot"></div>
-    </section>
-    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>`;
-    document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => start(b.dataset.mode));
-    showHist("#histIntro");
-    G.setup($("#stage"), $("#foot"));
-    window.addEventListener("keydown", e => { if ($("#sGame").classList.contains("on") && !itemDone && G.key) { if (G.key(e) !== false && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); } });
-  }
-  function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
-  function start(m) {
-    mode = Object.assign({ key: m }, MODES(G)[m]); idx = 0; level = mode.start; results = []; runStart = performance.now();
-    $("#hTot").textContent = mode.n; $("#hMode").textContent = m === "practice" ? "Practice" : m === "hard" ? "Hard drill" : G.title;
-    if (G.onStart) G.onStart(mode);
-    show("sGame"); next();
-  }
-  function next() {
-    if (idx >= mode.n) return end();
-    $("#hNum").textContent = idx + 1; itemDone = false; paused = false;
-    const item = G.newItem(level);
-    G.render(item);
-    tItemStart = performance.now();
-    limit = G.perItem ? G.perItem * mode.timer * (G.timeFactor ? G.timeFactor(item) : 1) : 0;
-    cancelAnimationFrame(raf); tick();
-  }
-  function elapsed() { return ((paused ? pauseAt : performance.now()) - tItemStart) / 1000; }
-  function tick() {
-    if (itemDone) return;
-    const e = elapsed();
-    if (limit) {
-      const left = Math.max(0, limit - e);
-      $("#hTime").textContent = Math.ceil(left);
-      $("#hBar").style.width = (100 * left / limit) + "%";
-      if (left <= 0) { const r = G.timeout ? G.timeout() : { correct: false, note: "Time ran out" }; r.timedOut = true; answer(r.correct, r); return; }
-    } else if (G.progress) { $("#hBar").style.width = (100 * (1 - G.progress())) + "%"; $("#hTime").textContent = ""; }
-    raf = requestAnimationFrame(tick);
-  }
-  function addTime(s) { limit += s; }
-  function pause() { if (!paused) { paused = true; pauseAt = performance.now(); } }
-  function resume() { if (paused) { tItemStart += performance.now() - pauseAt; paused = false; } }
-  function answer(correct, info = {}) {
-    if (itemDone) return; itemDone = true; cancelAnimationFrame(raf);
-    const used = Math.min(elapsed(), limit || 1e9);
-    results.push({ correct: !!correct, used, level, info });
-    const fb = mode.feedback;
-    flash(correct ? (fb ? "Correct" : "") : (info.timedOut ? "Time's up" : "Incorrect") + (fb && info.note ? " — " + info.note : ""), correct ? "ok" : "bad", fb ? (correct ? 900 : 2600) : 450);
-    level = Math.max(1, Math.min(5, level + (correct ? 1 : -1)));
-    idx++;
-    setTimeout(next, (fb ? (correct ? 950 : 2700) : 500) + (info.delay || 0));
-  }
-  function flash(t, cls, ms) {
-    const f = $("#flash"); if (!t) return; f.className = "flash on " + cls; f.firstChild.textContent = t;
-    clearTimeout(f._t); f._t = setTimeout(() => f.className = "flash", ms);
-  }
-  function key() { return "mmq_hist_" + G.id; }
-  function hist() { try { return JSON.parse(localStorage.getItem(key()) || "[]"); } catch (e) { return []; } }
-  function showHist(sel) {
-    const h = hist(); const el = document.querySelector(sel); if (!el) return;
-    if (!h.length) { el.innerHTML = ""; return; }
-    const best = h.filter(r => r.mode !== "practice").reduce((b, r) => (!b || r.score > b.score || (r.score === b.score && r.time < b.time)) ? r : b, null);
-    el.innerHTML = `<h2 style="font-size:18px;margin-top:18px">Your history</h2>` +
-      (best ? `<div>Best: <b>${best.score}/${best.total}</b> (${best.mode}, ${new Date(best.date).toLocaleDateString()})</div>` : "") +
-      `<table class="rev">${h.slice(-5).reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td><td>${r.mode}</td><td>${r.score}/${r.total}</td><td>${r.acc}%</td><td>${fmt(r.time)}</td></tr>`).join("")}</table>`;
-  }
-  function end() {
-    const n = results.length, c = results.filter(r => r.correct).length;
-    const time = results.reduce((s, r) => s + r.used, 0), wall = (performance.now() - runStart) / 1000;
-    const wscore = results.reduce((s, r) => s + (r.correct ? r.level : 0), 0);
-    const rec = { date: Date.now(), mode: mode.key, score: c, total: n, acc: Math.round(100 * c / n), time: Math.round(time), maxLevel: Math.max(...results.map(r => r.level)) };
-    try { const h = hist(); h.push(rec); localStorage.setItem(key(), JSON.stringify(h.slice(-50))); } catch (e) {}
-    $("#endBody").innerHTML = `<a class="back" href="index.html">&larr; All games</a><div style="height:14px"></div>
-      <div class="cat"><i></i>${G.cat}</div><h1>${G.title}</h1><h2>Finished</h2>
-      <div class="stat">
-        <div><b id="endScore">${c} / ${n}</b><span>Score (correct)</span></div>
-        <div><b id="endAcc">${rec.acc}%</b><span>Accuracy</span></div>
-        <div><b>${fmt(time)}</b><span>Time used on questions</span></div>
-        <div><b>${(time / n).toFixed(1)}s</b><span>Average per question</span></div>
-        <div><b>${wscore}</b><span>Difficulty-weighted score</span></div>
-        <div><b>${rec.maxLevel} / 5</b><span>Highest level reached</span></div>
-      </div>
-      <table class="rev"><tr><td><b>#</b></td><td><b>Level</b></td><td><b>Result</b></td><td><b>Time</b></td><td></td></tr>
-      ${results.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td><td class="${r.correct ? "ok" : "bad"}">${r.correct ? "Correct" : r.info.timedOut ? "Timed out" : "Wrong"}</td><td>${r.used.toFixed(1)}s</td><td style="font-size:12px;opacity:.75">${r.correct ? "" : (r.info.note || "")}</td></tr>`).join("")}</table>
-      <div class="modes" style="margin-top:16px"><button class="btn primary" id="again">Play again (${mode.label})</button><button class="btn" id="menu">Back to menu</button></div>
-      <div class="hist" id="histEnd"></div><div class="note">Wall-clock time including feedback: ${fmt(wall)}</div>`;
-    $("#again").onclick = () => start(mode.key);
-    $("#menu").onclick = () => { showHist("#histIntro"); show("sIntro"); };
-    showHist("#histEnd");
-    show("sEnd");
-    window.__lastResult = rec;
-  }
-  return { init, answer, addTime, pause, resume, flash, rnd, pick, shuffle, get mode() { return mode; }, get done() { return itemDone; } };
-})();
+</style></head><body><div id="app"></div><script src="js/storage.js"></script><script src="js/game-logic.js"></script><script src="js/harness.js"></script><script>
 
 (() => {
 const N = 5; let it, pos, gridEl, cells, drag = null, showSum = false;
-// Net shapes are connected polyominoes; from level 3 they may include diagonal (corner-touching) steps, as in the official practice item.
-function makeShape(level) {
-  const size = H.rnd(3, Math.min(6, 3 + Math.ceil(level / 1.5)));
-  const diag = level >= 3 && Math.random() < 0.55;
-  const dirs = [[1,0],[-1,0],[0,1],[0,-1]].concat(diag ? [[1,1],[1,-1],[-1,1],[-1,-1]] : []);
-  for (;;) {
-    const s = [[0,0]];
-    while (s.length < size) { const b = H.pick(s), d = H.pick(dirs), c = [b[0]+d[0], b[1]+d[1]]; if (!s.some(q => q[0]===c[0] && q[1]===c[1])) s.push(c); }
-    const mx = Math.min(...s.map(q=>q[0])), my = Math.min(...s.map(q=>q[1]));
-    const sh = s.map(q => [q[0]-mx, q[1]-my]);
-    const w = Math.max(...sh.map(q=>q[0]))+1, h = Math.max(...sh.map(q=>q[1]))+1;
-    if (w <= 4 && h <= 4 && w*h > size - 0 && !(w===1&&h===size) ) return { cells: sh, w, h };
-  }
-}
-function sumAt(g, sh, x, y) { return sh.cells.reduce((s, [dx, dy]) => s + g[(y+dy)*N + x+dx], 0); }
-function placements(sh) { const r = []; for (let y = 0; y + sh.h <= N; y++) for (let x = 0; x + sh.w <= N; x++) r.push([x, y]); return r; }
-function newItem(level) {
-  for (let tries = 0; ; tries++) {
-    const sh = makeShape(level);
-    const dens = 0.32 + 0.05 * level, negP = 0.12 + 0.08 * level, mag = 4 + level;
-    const g = Array.from({ length: N*N }, () => Math.random() < dens ? (Math.random() < negP ? -H.rnd(1, mag) : H.rnd(1, mag)) : 0);
-    const ps = placements(sh), sums = ps.map(([x,y]) => sumAt(g, sh, x, y));
-    const best = Math.max(...sums), nb = sums.filter(s => s === best).length;
-    const second = Math.max(...sums.filter(s => s !== best));
-    // Unique optimum; harder levels need a close runner-up and an optimum that includes a negative tile.
-    if (nb !== 1) continue;
-    if (level >= 3 && best - second > 2 && tries < 300) continue;
-    const bp = ps[sums.indexOf(best)];
-    const hasNeg = sh.cells.some(([dx,dy]) => g[(bp[1]+dy)*N + bp[0]+dx] < 0);
-    if (level >= 4 && !hasNeg && tries < 300) continue;
-    return { g, sh, best, bp };
-  }
-}
+const { sumAt } = MMQLogic.net;
+const newItem = level => MMQLogic.net.newItem(level);
 function setup(stage, foot) {
   stage.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:10px 14px"><div class="grid" id="grid"></div><div class="sumb" id="sumb"></div></div>`;
   foot.innerHTML = `<button class="btn primary" id="submit">Submit &rarr;</button>`;
@@ -211,7 +56,7 @@ function setup(stage, foot) {
   gridEl.innerHTML = Array.from({ length: N*N }, (_, i) => `<div class="cell" data-i="${i}"></div>`).join("");
   cells = [...gridEl.children];
   foot.querySelector("#submit").onclick = submit;
-  gridEl.addEventListener("pointerdown", e => { const c = cellFrom(e); if (!c) return; gridEl.setPointerCapture(e.pointerId); drag = { sx: c[0], sy: c[1], px: pos[0], py: pos[1] }; });
+  gridEl.addEventListener("pointerdown", e => { if (H.done) return; const c = cellFrom(e); if (!c) return; gridEl.setPointerCapture(e.pointerId); drag = { sx: c[0], sy: c[1], px: pos[0], py: pos[1] }; });
   gridEl.addEventListener("pointermove", e => { if (!drag) return; const c = cellFrom(e, true); if (!c) return; move(drag.px + c[0] - drag.sx, drag.py + c[1] - drag.sy, true); });
   const up = () => drag = null; gridEl.addEventListener("pointerup", up); gridEl.addEventListener("pointercancel", up);
 }
@@ -231,7 +76,7 @@ function draw(reveal) {
   cells.forEach((c, i) => { const v = it.g[i]; c.className = "cell" + (v > 0 ? " p" : v < 0 ? " n" : "") + (inSet.has(i) ? " in" : "") + (reveal && bestSet.has(i) ? " best" : ""); c.textContent = v || ""; });
   document.getElementById("sumb").textContent = showSum ? "Net sum: " + sumAt(it.g, it.sh, pos[0], pos[1]) : "";
 }
-function render(item) { it = item; pos = [Math.floor((N - it.sh.w) / 2), Math.floor((N - it.sh.h) / 2)]; showSum = false; draw(); }
+function render(item) { drag = null; it = item; pos = [Math.floor((N - it.sh.w) / 2), Math.floor((N - it.sh.h) / 2)]; showSum = false; draw(); }
 function result() { const s = sumAt(it.g, it.sh, pos[0], pos[1]); return { correct: s === it.best, note: `your sum ${s}, best possible ${it.best} (dashed outline)` }; }
 function submit() { if (H.done) return; const r = result(); if (H.mode.feedback) { showSum = true; draw(true); } H.answer(r.correct, r); }
 H.init({ id: "net", title: "Net the Numbers", cat: "Numerical Reasoning", accent: "#8f4b4b", items: 12, perItem: 20, timerText: "20 s per question",
@@ -241,6 +86,6 @@ H.init({ id: "net", title: "Net the Numbers", cat: "Numerical Reasoning", accent
   <li>When time runs out, the net's current position is submitted.</li></ul>`,
   setup, newItem, render, timeout: () => { const r = result(); if (H.mode.feedback) { showSum = true; draw(true); } return r; },
   key: e => { const m = { ArrowLeft: [-1,0], ArrowRight: [1,0], ArrowUp: [0,-1], ArrowDown: [0,1] }[e.key]; if (m) move(m[0], m[1]); else if (e.key === "Enter" || e.key === " ") submit(); } });
-window.__game = { get item() { return it; }, get pos() { return pos; }, move, submit };
+if (new URLSearchParams(location.search).has("debug")) window.__game = { get item() { return it; }, get pos() { return pos; }, move, submit };
 })();
 </script></body></html>
