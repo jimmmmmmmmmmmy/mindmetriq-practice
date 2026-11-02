@@ -20,5 +20,7 @@ test('history recovers after corrupt data, keeps 50 runs and separates hard dril
   assert.equal(history.read('net',s).length,50);
   assert.equal(history.read('net',s)[0].date,11);
   assert.deepEqual(history.best([{...record,mode:'hard',score:3},record]),record);
+  const mock={...record,mode:'battery',score:3,total:3,time:4};
+  assert.equal(history.best([record,mock]).time,4);
   assert.equal(history.best([{...record,time:8},{...record,time:6}]).time,6);
 });

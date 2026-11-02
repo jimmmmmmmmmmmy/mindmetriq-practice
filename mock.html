@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Full mock · MindmetriQ practice</title>
+  <link rel="stylesheet" href="css/home.css?v=insights-20261102">
+  <link rel="stylesheet" href="css/results.css?v=insights-20261102">
+</head>
+<body>
+  <main>
+    <a class="back" href="index.html">← All games</a>
+    <h1>Full mock</h1>
+    <p class="lead">One sitting of about <b>45 minutes</b>: Numerical Insights, then the six games. Questions are generated in this browser. Scores stay on this phone.</p>
+    <ol id="plan"></ol>
+    <div class="actions">
+      <button type="button" class="go" id="start">Start full mock</button>
+      <button type="button" class="go secondary" id="resume" hidden>Resume mock</button>
+      <button type="button" class="text" id="restart" hidden>Start over</button>
+    </div>
+    <section id="latest"></section>
+    <section id="history"></section>
+    <footer>Unofficial practice · not a Test Partnership score</footer>
+  </main>
+  <script src="js/battery.js?v=insights-20261102"></script>
+  <script>
+  const plan = document.querySelector("#plan");
+  const fmt = seconds => Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+  plan.innerHTML = MMQBattery.order.map(section => `<li><span>${section.title}</span><small>${section.items} questions · about ${section.minutes} min</small></li>`).join("")
+    + `<li class="total"><span>${MMQBattery.questions} questions</span><small>about ${MMQBattery.minutes} min</small></li>`;
+  function hrefFor(session) {
+    const section = MMQBattery.order[session.index];
+    const url = new URL(section.href, location.href);
+    url.searchParams.set("battery", "1");
+    if (new URLSearchParams(location.search).has("debug")) url.searchParams.set("debug", "1");
+    return url.pathname.split("/").pop() + url.search;
+  }
+  function drawRun(run) {
+    const when = new Date(run.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return `<p class="lead">${when}</p><div class="stat">
+      <div><b>${run.score} / ${run.total}</b><span>Correct</span></div>
+      <div><b>${run.acc}%</b><span>Accuracy</span></div>
+      <div><b>${fmt(run.time)}</b><span>Time on questions</span></div>
+      <div><b>${run.meanResponse.toFixed(1)}s</b><span>Average response</span></div>
+    </div><table class="rev"><thead><tr><th>Section</th><th>Score</th><th>Accuracy</th><th>Time</th><th>Avg</th></tr></thead><tbody>`
+      + run.sections.map(section => {
+        const meta = MMQBattery.order.find(item => item.id === section.id);
+        const acc = Math.round(100 * section.score / section.total);
+        return `<tr><td>${meta.title}</td><td>${section.score}/${section.total}</td><td>${acc}%</td><td>${fmt(section.time)}</td><td>${(section.time / section.total).toFixed(1)}s</td></tr>`;
+      }).join("") + "</tbody></table>";
+  }
+  function show() {
+    const session = MMQBattery.readSession();
+    const runs = MMQBattery.history();
+    document.querySelector("#resume").hidden = !session;
+    document.querySelector("#restart").hidden = !session;
+    document.querySelector("#start").hidden = !!session;
+    if (session) document.querySelector("#resume").textContent = `Resume section ${session.index + 1} of ${MMQBattery.order.length}`;
+    const params = new URLSearchParams(location.search);
+    const latest = document.querySelector("#latest");
+    if (params.has("results") && runs.length) {
+      latest.innerHTML = `<h2>Latest mock</h2>${drawRun(runs.at(-1))}`;
+    } else latest.innerHTML = "";
+    document.querySelector("#history").innerHTML = runs.length ? `<h2>Local history</h2>${runs.slice().reverse().map(drawRun).join("<hr>")}` : "";
+  }
+  document.querySelector("#start").onclick = () => { MMQBattery.begin(); location.href = hrefFor(MMQBattery.readSession()); };
+  document.querySelector("#resume").onclick = () => { const session = MMQBattery.readSession(); if (session) location.href = hrefFor(session); };
+  document.querySelector("#restart").onclick = () => { MMQBattery.begin(); location.href = hrefFor(MMQBattery.readSession()); };
+  show();
+  </script>
+</body>
+</html>

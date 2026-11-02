@@ -1,16 +1,65 @@
-# MindmetriQ practice games
+# MindmetriQ practice
 
-Open [the practice hub](https://jimmmmmmmmmmmy.github.io/mindmetriq-practice/index.html), or open `index.html` locally. No build, server, account, or runtime dependencies are required. Scores stay in this browser.
+Unofficial personal practice for a Test Partnership battery: Insights Numerical, then the six MindmetriQ games. Open [the practice hub](https://jimmmmmmmmmmmy.github.io/mindmetriq-practice/index.html), or open `index.html` locally. No build, server, account, or install is required. Scores stay in this browser. The same files are what GitHub Pages serves; there is no separate deploy step.
 
-These are unofficial personal-practice remakes, unaffiliated with Test Partnership. The six tasks and full-test item counts match its [current overview](https://www.testpartnership.com/gamified-assessment.html). Practice timers, generated content, difficulty levels, and scores are this app's own; they do not reproduce the proprietary item bank, calibrated adaptive algorithm, or norm scores.
+On a phone, open that hub URL in the browser. The games use a narrow column. The full mock lists every section and can be resumed from `mock.html`.
 
-| Game | Timed-test items | Practice-app timing | Rule |
-|---|---:|---|---|
-| Net the Numbers | 12 | 20 s per question | Move a fixed net to the highest sum, including negative totals. |
-| Number Racer | 12 | 5 s planning, then 13 s falling (8 numbers) | Catch a subset that adds to the exact target; avoid the rest. |
-| Link Swipe | 15 | 6 s per pair | Same meaning, opposite meaning, or another relationship. |
-| Word Logic | 15 | 15 s per question; three +10 s boosts per run | Complete an analogy using the same relationship. |
-| Pipe Puzzle | 10 | 20 s per puzzle | Swap movable tiles to connect the fixed ends; no rotation. |
-| Shape Spinner | 10 | 12 s per wheel | Every pair must share shape XOR shading. |
+These puzzles are generated in the browser. They are not the publisher's items, and the scores are not official percentiles.
 
-Practice has three questions in each game except Link Swipe, which has four pairs. Every game also has practice feedback and a hard drill with 25% less time. Racer hard drill reduces both planning and falling time. Correct answers raise the next requested level; wrong answers lower it, within levels 1–5. The result table records the actual selected difficulty. Best timed-test scores exclude practice and hard drill.
+## Run the tests
+
+```bash
+npm test
+python3 -m pip install -r requirements-dev.txt
+python3 -m playwright install --with-deps chromium
+npm run test:browser
+```
+
+## Full mock
+
+`mock.html` runs one sitting of about 45 minutes: Numerical Insights (15 questions, 15:00), then the six games at this app's timed-test lengths. Published section times below include instructions, so the answer clocks are shorter than the advertised minutes. Together they are the public 15 + about 30 minutes.
+
+| Section | Questions | Published length | This app |
+|---|---:|---:|---|
+| Numerical Insights | 15 | 15 min | 15:00 for the section. Practice is 4 questions, 75 s each. |
+| Net the Numbers | 12 | 4 min | 20 s per question |
+| Number Racer | 12 | 6 min | 5 s planning, then 8 numbers at 1.625 s |
+| Link Swipe | 15 | 6 min | 6 s per pair |
+| Word Logic | 15 | 6 min | 15 s per question, three +10 s boosts |
+| Pipe Puzzle | 10 | 4 min | 20 s per puzzle |
+| Shape Spinner | 10 | 4 min | 12 s per wheel |
+
+Each game also has a short practice round and a hard drill with 25% less time. A correct answer raises the next requested level and a miss lowers it, within levels 1–5. The result screen shows accuracy, response time, and difficulty. History is kept in `localStorage`. Best badges count standalone timed runs and full-mock sections, not practice or hard drill.
+
+## Solution review
+
+After a round, each question has **Show solution**. That view calls `js/solver.js`, which receives only an exported puzzle: the grid, words, wheel, pipes, or chart the generator just built. It does not read the stored answer, and it is not called while a timer is running. It does not open, scrape, or drive any assessment site.
+
+The solver is JavaScript, next to the generators, because the app has no build step and the review screen has to run in the same browser. A separate Python package would need a second copy of every puzzle.
+
+| Game | Method |
+|---|---|
+| Net the Numbers | Sum every legal placement. |
+| Number Racer | Exact subset search, shortest group first. |
+| Numerical Insights | Read the named cells from the table, chart, or passage, then evaluate that expression. |
+| Link Swipe and Word Logic | Look up this repo's own word lists. |
+| Shape Spinner | Reject rotations with the first pair, then test the rest. Exact on the survivors. |
+| Pipe Puzzle | Follow the start opening and spend the pipe inventory by search. |
+
+No learned model is included. These puzzles are small enough that the exact search is also the fast method, and the tests check it against the generator.
+
+## Sources
+
+- [MindmetriQ game tasks and current question counts](https://www.testpartnership.com/gamified-assessment.html)
+- [Insights Numerical: 15 questions, 15 minutes, charts and tables, adaptive scoring](https://www.testpartnership.com/numerical.html)
+- [Insights technical manual: graph, table, or passage; GCSE arithmetic; calculator allowed](https://www.testpartnership.com/samplereports/psychometric-properties.pdf)
+- [MindmetriQ technical manual: about 30 minutes for all six games, Rasch scoring](https://www.testpartnership.com/fact-sheets/MindmetriQ-Technical-Manual.pdf)
+- [Six-question numerical preview](https://www.testpartnership.com/free/numerical/1/). The preview is not reused here.
+
+## What the public pages do not specify
+
+The live Insights screen was not available, so this app does not copy its option count or whether several questions share one chart. Each generated question has its own exhibit and five choices. A different product, Smart Numerical, does say three questions share an exhibit; that layout is not described for Insights.
+
+Per-question seconds inside the real games are not published. This app keeps the timers it already used. Word Logic is 15 questions on the current overview and 12 in the older technical manual; the app follows the overview.
+
+Aurora's careers pages describe quantitative assessments and link practice on the SHL site. They do not name Test Partnership. This hub follows the Insights-plus-six-games battery described for the sitting, not those SHL pages.

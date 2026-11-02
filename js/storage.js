@@ -3,7 +3,7 @@
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.MMQHistory = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
-  const modes = new Set(["test", "practice", "hard"]);
+  const modes = new Set(["test", "practice", "hard", "battery"]);
   function valid(r) {
     return r && modes.has(r.mode) && Number.isInteger(r.total) && r.total > 0 && r.total <= 15 &&
       Number.isInteger(r.score) && r.score >= 0 && r.score <= r.total &&
@@ -26,7 +26,7 @@
     } catch { /* Games still work if browser storage is disabled or full. */ }
   }
   function best(history, mode = "test") {
-    return history.filter(r => r.mode === mode).reduce((b, r) =>
+    return history.filter(r => r.mode === mode || (mode === "test" && r.mode === "battery")).reduce((b, r) =>
       !b || r.score / r.total > b.score / b.total ||
       (r.score / r.total === b.score / b.total && r.time < b.time) ? r : b, null);
   }

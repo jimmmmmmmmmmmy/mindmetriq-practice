@@ -1,8 +1,8 @@
 // Render saved, immutable answer snapshots. Review never changes live game state.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./game-logic.js').create());
-  else root.MMQReview = factory(root.MMQLogic);
-})(typeof globalThis !== 'undefined' ? globalThis : this, logic => {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./game-logic.js').create(), require('./insights-logic.js'), require('./solver.js'));
+  else root.MMQReview = factory(root.MMQLogic, root.MMQInsights, root.MMQSolver);
+})(typeof globalThis !== 'undefined' ? globalThis : this, (logic, insights, solver) => {
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const equation = values => values.length ? values.map(v => v < 0 ? `(${v})` : v).join(' + ') + ' = ' + values.reduce((a,b) => a+b,0) : 'No numbers = 0';
   const note = (label, text) => `<p class="review-explanation"><b>${escape(label)}</b> ${escape(text)}</p>`;
@@ -110,9 +110,31 @@
     return `<svg class="review-wheel" viewBox="-185 -185 370 370" role="img" aria-label="${solution ? 'Correct' : 'Submitted'} wheel position, ${rotation} steps clockwise">${drawing}</svg>` +
       note('Position:', `${rotation} step${rotation===1?'':'s'} clockwise from the start.`) + `<ul class="review-pairs">${checks}</ul>`;
   }
-  const renderers={ net, racer, swipe, wordlogic:word, pipes, spinner };
-  function render(id,snapshot,view='solution') { return renderers[id](snapshot,view==='solution'); }
+  function insightsReview(s, solution) {
+    if (!s || s.unanswered || !s.options) return note('Not reached:', 'The overall time limit ended the section before this question.');
+    const selected = solution ? s.answer : s.selected;
+    return (insights ? insights.diagram(s) : '') + `<p class="review-prompt">${escape(s.prompt)}</p><div class="review-options">` +
+      s.options.map((opt, i) => `<div class="review-option ${i === selected ? (solution ? 'solution' : 'submitted') : ''}">${escape(opt)}${i === selected ? `<small>${solution ? 'Correct answer' : 'Your answer'}</small>` : ''}</div>`).join('') +
+      '</div>' + (!solution && s.selected < 0 ? note('Your answer:', 'No answer submitted.') : '') + note('Working:', s.explain);
+  }
+  const renderers={ net, racer, swipe, wordlogic:word, pipes, spinner, insights: insightsReview };
+  function worked(id, snapshot, solution) {
+    if (!solution || !solver || !snapshot || snapshot.unanswered) return '';
+    let solved;
+    try {
+      const puzzle = solver.exportPuzzle(id, snapshot);
+      if (!puzzle) return '';
+      solved = solver.solve(puzzle);
+    } catch { return ''; }
+    const several = id === 'racer' || id === 'pipes' ? ' More than one answer can be correct. This trace does not read the stored answer.' : '';
+    return `<div class="solver-trace"><b>How to solve it</b><p>${escape(solved.method)}${escape(several)}</p><ol>${solved.steps.map(step => `<li>${escape(step)}</li>`).join('')}</ol></div>`;
+  }
+  function render(id,snapshot,view='solution') {
+    const solution = view === 'solution';
+    return renderers[id](snapshot, solution) + worked(id, snapshot, solution);
+  }
   function status(id,r) {
+    if (r.info && r.info.unanswered) return 'Not reached';
     if(r.correct) return r.info.timedOut && id!=='racer' ? 'Correct · submitted at the time limit' : 'Correct';
     return id==='racer' ? 'Target not reached' : r.info.timedOut ? 'Time limit reached' : 'Incorrect';
   }
@@ -121,7 +143,7 @@
     return results.map((r,i)=>`<details class="answer-review" id="review-${i}" ${(i === (firstMiss<0?0:firstMiss))?'open':''}>
       <summary><span class="review-summary-title">Question ${i+1} <span class="${r.correct?'ok':'bad'}">${escape(status(id,r))}</span></span><span class="review-meta">Level ${r.level} · ${r.used.toFixed(1)}s${r.info.retryCount ? ` · ${r.info.retryCount} retr${r.info.retryCount===1?"y":"ies"}` : ""}</span></summary>
       <div class="review-content"><div class="review-toggle" role="group" aria-label="Question ${i+1} answer view">
-      <button type="button" data-review="${i}" data-view="submitted" aria-pressed="false">Your answer</button><button type="button" data-review="${i}" data-view="solution" aria-pressed="true">${id==='pipes' || id==='racer' ? 'One valid solution' : 'Correct answer'}</button></div>
+      <button type="button" data-review="${i}" data-view="submitted" aria-pressed="false">Your answer</button><button type="button" data-review="${i}" data-view="solution" aria-pressed="true">Show solution</button></div>
       <p class="review-view-label">${id==='pipes' || id==='racer' ? 'One valid solution' : 'Correct answer'} · highlighted in green</p>
       <div class="review-diagram" aria-live="polite">${render(id,r.snapshot)}</div></div></details>`).join('');
   }

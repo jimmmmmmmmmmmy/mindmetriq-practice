@@ -43,6 +43,12 @@ const MMQDemo = (() => {
       ['Accept exactly one match','Same shape with different shading works. Same shading with different shapes also works.','spinner'],
       ['Rotate and submit','Drag the wheel, use the left and right buttons, or press the arrow keys. Check all pairs before pressing Enter.','keys'],
       ['Try the practice round','You have twelve seconds per wheel. The current position is submitted when the timer ends.','duration']
+    ],
+    insights: [
+      ['Read the exhibit','Each question has its own table, chart, or short passage. Use only the figures in front of you.','insights'],
+      ['Set up the calculation','Questions use differences, totals, averages, shares, and percentage change.','insights'],
+      ['Pick one answer','There are five choices. A calculator is allowed and can be opened above the keypad.','keys'],
+      ['Keep the section clock','A timed section is 15 questions in 15 minutes. Practice is four questions, with 75 seconds each and feedback.','duration']
     ]
   };
   function example(id, page) {
@@ -51,10 +57,11 @@ const MMQDemo = (() => {
     if(id==='swipe'){const pairs=[['begin','start','S'],['begin','start','S'],['arrive','depart','A'],['lock','key','N']];const p=pairs[Math.min(page,3)];return MMQReview.render(id,{words:p.slice(0,2),answer:p[2],picked:null});}
     if(id==='wordlogic'){return MMQReview.render(id,{b:[1,'lamb','sheep','kitten','cat'],opts:['dog','cat','horse','duck','pig'],selected:-1,relation:'young animal → adult'});}
     if(id==='pipes')return MMQReview.render(id,MMQLogic.pipes.newItem(1));
+    if(id==='insights') return MMQInsights.diagram(MMQInsights.create().newItem(1));
     const s=MMQLogic.spinner.newItem(1);return MMQReview.render(id,{...s,rot:0},page===1?'submitted':'solution');
   }
   function art(id) {
-    const paths={net:'M20 50h50V20h50v50h50v50h-50v50H70v-50H20z',racer:'M90 15l55 145-55-35-55 35z M25 35h25v25H25z M140 80h25v25h-25z',swipe:'M40 30h100v125H40z M55 90h70 M15 75l-12 15 12 15 M165 75l12 15-12 15',wordlogic:'M20 140l35-100 35 100 M33 105h45 M110 45h45 M132 45v95',pipes:'M25 30h60v60h65v60H90v-40H25z',spinner:'M90 15a75 75 0 1 0 1 0 M90 45v35 M130 120l-30-18 M50 120l30-18'};
+    const paths={net:'M20 50h50V20h50v50h50v50h-50v50H70v-50H20z',racer:'M90 15l55 145-55-35-55 35z M25 35h25v25H25z M140 80h25v25h-25z',swipe:'M40 30h100v125H40z M55 90h70 M15 75l-12 15 12 15 M165 75l12 15-12 15',wordlogic:'M20 140l35-100 35 100 M33 105h45 M110 45h45 M132 45v95',pipes:'M25 30h60v60h65v60H90v-40H25z',spinner:'M90 15a75 75 0 1 0 1 0 M90 45v35 M130 120l-30-18 M50 120l30-18',insights:'M30 150h130 M40 150V80h22v70 M78 150V48h22v102 M116 150V96h22v54'};
     return `<svg class="intro-art" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="${paths[id]}"/></svg>`;
   }
   return { pages, example, art };
