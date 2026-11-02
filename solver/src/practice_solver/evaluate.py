@@ -80,12 +80,12 @@ def _log_prob_tables(log_probs: torch.Tensor, records: list[dict]) -> list[list[
 
 
 def _by_level(records: list[dict], flags: list[bool]) -> dict[str, dict]:
-    buckets: dict[int, list[bool]] = {}
+    buckets: dict[str, list[bool]] = {}
     for record, flag in zip(records, flags):
-        buckets.setdefault(int(record["level"]), []).append(bool(flag))
+        buckets.setdefault(str(record["level"]), []).append(bool(flag))
     return {
-        str(level): {"correct": sum(flags), "total": len(flags)}
-        for level, flags in sorted(buckets.items())
+        level: {"correct": sum(items), "total": len(items)}
+        for level, items in sorted(buckets.items())
     }
 
 

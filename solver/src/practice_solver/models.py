@@ -68,9 +68,12 @@ def pipe_tensors(records: list[dict]) -> tuple[torch.Tensor, torch.Tensor, torch
     inputs, targets, masks = [], [], []
     for record in records:
         puzzle, truth, width = record["puzzle"], record["truth"], record["puzzle"]["N"]
-        channel_grid = [[[0.0 for _ in range(GRID)] for _ in range(GRID)] for _ in range(9)]
-        target_grid = [[0 for _ in range(GRID)] for _ in range(GRID)]
-        pipe_grid = [[False for _ in range(GRID)] for _ in range(GRID)]
+        # In-distribution boards are at most 6 by 6 and stay on that canvas.
+        # A larger stress board uses its own size; the conv net accepts it.
+        size = max(GRID, width)
+        channel_grid = [[[0.0 for _ in range(size)] for _ in range(size)] for _ in range(9)]
+        target_grid = [[0 for _ in range(size)] for _ in range(size)]
+        pipe_grid = [[False for _ in range(size)] for _ in range(size)]
         for index, cell in enumerate(puzzle["cells"]):
             x, y = index % width, index // width
             kind = {"p": 0, "e": 1, "x": 2}[cell["t"]]

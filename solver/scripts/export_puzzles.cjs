@@ -88,12 +88,124 @@ function records(count, seed) {
   return lines;
 }
 
+// The practice generator rejects levels outside 1–5 and never builds a board
+// larger than 6 by 6. This stress set is not that generator: 7 by 7, a longer
+// forced route, more spare pipes, and more swaps. It is for evaluation only.
+function stressPipes(count, seed) {
+  const random = seeded(seed + 1);
+  const rnd = (a, b) => a + Math.floor(random() * (b - a + 1));
+  const pick = list => list[Math.floor(random() * list.length)];
+  const shuffle = list => {
+    const copy = list.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+  const D = [[0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8]];
+  const OPP = { 1: 4, 2: 8, 4: 1, 8: 2 };
+  const N = 7;
+  const PIPES = [5, 10, 3, 6, 12, 9];
+  function genPath(s, t, minLen) {
+    for (let attempt = 0; attempt < 800; attempt++) {
+      const path = [s];
+      const seen = new Set([s]);
+      let budget = 8000;
+      const ok = (function dfs(c) {
+        if (--budget <= 0) return false;
+        if (c === t) return path.length >= minLen;
+        if (path.length > minLen + 2) return false;
+        const x = c % N, y = (c / N) | 0;
+        for (const [dx, dy] of shuffle(D)) {
+          const nx = x + dx, ny = y + dy, n = ny * N + nx;
+          if (nx < 0 || ny < 0 || nx >= N || ny >= N || seen.has(n)) continue;
+          if (n !== t && path.length + 1 < minLen && random() < 0.1) continue;
+          seen.add(n); path.push(n);
+          if (dfs(n)) return true;
+          path.pop(); seen.delete(n);
+        }
+        return false;
+      })(s);
+      if (ok) return path;
+    }
+    return null;
+  }
+  const bitTo = (a, b) => {
+    const dx = b % N - a % N, dy = ((b / N) | 0) - ((a / N) | 0);
+    return D.find(step => step[0] === dx && step[1] === dy)[2];
+  };
+  function connected(cells, s) {
+    let c = s, out = cells[s].m, steps = 0;
+    while (steps++ < N * N + 2) {
+      const step = D.find(item => item[2] === out);
+      if (!step) return false;
+      const x = c % N + step[0], y = ((c / N) | 0) + step[1];
+      if (x < 0 || y < 0 || x >= N || y >= N) return false;
+      const n = y * N + x, cell = cells[n];
+      if (!(cell.m & OPP[out])) return false;
+      if (cell.t === "e") return n !== s;
+      if (cell.t !== "p") return false;
+      out = cell.m & ~OPP[out]; c = n;
+    }
+    return false;
+  }
+  const lines = [];
+  for (let i = 0; i < count; i++) {
+    let item = null;
+    for (let attempt = 0; attempt < 2000 && !item; attempt++) {
+      const border = [];
+      for (let cell = 0; cell < N * N; cell++) {
+        const x = cell % N, y = (cell / N) | 0;
+        if (x === 0 || y === 0 || x === N - 1 || y === N - 1) border.push(cell);
+      }
+      const s = pick(border), t = pick(border);
+      const dist = Math.abs(s % N - t % N) + Math.abs(((s / N) | 0) - ((t / N) | 0));
+      if (dist < 4) continue;
+      const path = genPath(s, t, Math.min(dist + 15, N * N - 12));
+      if (!path) continue;
+      const cells = Array.from({ length: N * N }, () => ({ t: "x", m: 0 }));
+      path.forEach((c, k) => {
+        let m = 0;
+        if (k > 0) m |= bitTo(c, path[k - 1]);
+        if (k < path.length - 1) m |= bitTo(c, path[k + 1]);
+        cells[c] = { t: k === 0 || k === path.length - 1 ? "e" : "p", m };
+      });
+      const need = {};
+      path.forEach(c => { need[c] = cells[c].m; });
+      const free = shuffle([...cells.keys()].filter(index => cells[index].t === "x"));
+      free.slice(0, rnd(6, 12)).forEach(index => { cells[index] = { t: "p", m: pick(PIPES) }; });
+      const movable = () => cells.map((cell, index) => cell.t === "p" ? index : -1).filter(index => index >= 0);
+      for (let swap = 0; swap < 18; swap++) {
+        const pipes = movable();
+        const a = pick(pipes);
+        const options = pipes.filter(index => index !== a && cells[index].m !== cells[a].m);
+        if (!options.length) continue;
+        const b = pick(options);
+        [cells[a], cells[b]] = [cells[b], cells[a]];
+      }
+      if (connected(cells, s)) continue;
+      item = { N, cells, s, t, path, need };
+    }
+    if (!item) throw new Error("Could not generate an out-of-distribution pipe board");
+    lines.push({
+      game: "pipes",
+      level: "ood",
+      distribution: "ood-7x7",
+      puzzle: { N: item.N, s: item.s, t: item.t, cells: item.cells.map(cell => ({ t: cell.t, m: cell.m })) },
+      truth: { cells: pipeTruth(item) }
+    });
+  }
+  return lines;
+}
+
 const count = Number(arg("--count", "40"));
 const seed = Number(arg("--seed", "1000"));
 const out = arg("--out", "");
 const lexiconOut = arg("--lexicon", "");
+const stress = arg("--stress", "");
 if (!Number.isInteger(count) || count < 1) throw new Error("--count must be a positive integer");
-const body = records(count, seed).map(row => JSON.stringify(row)).join("\n") + "\n";
+const body = (stress === "7x7" ? stressPipes(count, seed) : records(count, seed)).map(row => JSON.stringify(row)).join("\n") + "\n";
 if (out) fs.mkdirSync(path.dirname(out), { recursive: true });
 if (out) fs.writeFileSync(out, body);
 else process.stdout.write(body);
