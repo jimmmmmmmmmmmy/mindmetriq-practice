@@ -1,0 +1,14 @@
+{
+  "fresh_seeds": [88001, 88011, 88021, 88031, 88041],
+  "count": 200,
+  "draw_count": 800,
+  "per_level": 40,
+  "ood_seeds": [88101, 88111, 88121, 88131, 88141],
+  "ood_count": 40,
+  "ood_note": "js/game-logic.js rejects every level outside 1-5 and never builds a board larger than 6 by 6. The stress export is a separate 7 by 7 generator with a longer route, 6-12 spare pipes, and 18 swaps. It was not used to train or to choose the beam width.",
+  "training": [
+    {"name": "pipe_weights", "seed": 11, "count": 20000, "games": "pipes"},
+    {"name": "spinner_weights", "seed": 7, "count": 2000, "games": "net,racer,swipe,wordlogic,pipes,spinner,insights"}
+  ],
+  "already_used_for_tuning": [1000, 4242]
+}
