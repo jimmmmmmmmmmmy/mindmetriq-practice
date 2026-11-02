@@ -1,8 +1,8 @@
 // Render saved, immutable answer snapshots. Review never changes live game state.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./game-logic.js').create());
-  else root.MMQReview = factory(root.MMQLogic);
-})(typeof globalThis !== 'undefined' ? globalThis : this, logic => {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./game-logic.js').create(), require('./insights-logic.js'));
+  else root.MMQReview = factory(root.MMQLogic, root.MMQInsights);
+})(typeof globalThis !== 'undefined' ? globalThis : this, (logic, insights) => {
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const equation = values => values.length ? values.map(v => v < 0 ? `(${v})` : v).join(' + ') + ' = ' + values.reduce((a,b) => a+b,0) : 'No numbers = 0';
   const note = (label, text) => `<p class="review-explanation"><b>${escape(label)}</b> ${escape(text)}</p>`;
@@ -110,9 +110,17 @@
     return `<svg class="review-wheel" viewBox="-185 -185 370 370" role="img" aria-label="${solution ? 'Correct' : 'Submitted'} wheel position, ${rotation} steps clockwise">${drawing}</svg>` +
       note('Position:', `${rotation} step${rotation===1?'':'s'} clockwise from the start.`) + `<ul class="review-pairs">${checks}</ul>`;
   }
-  const renderers={ net, racer, swipe, wordlogic:word, pipes, spinner };
+  function insightsReview(s, solution) {
+    if (!s || s.unanswered || !s.options) return note('Not reached:', 'The overall time limit ended the section before this question.');
+    const selected = solution ? s.answer : s.selected;
+    return (insights ? insights.diagram(s) : '') + `<p class="review-prompt">${escape(s.prompt)}</p><div class="review-options">` +
+      s.options.map((opt, i) => `<div class="review-option ${i === selected ? (solution ? 'solution' : 'submitted') : ''}">${escape(opt)}${i === selected ? `<small>${solution ? 'Correct answer' : 'Your answer'}</small>` : ''}</div>`).join('') +
+      '</div>' + (!solution && s.selected < 0 ? note('Your answer:', 'No answer submitted.') : '') + note('Working:', s.explain);
+  }
+  const renderers={ net, racer, swipe, wordlogic:word, pipes, spinner, insights: insightsReview };
   function render(id,snapshot,view='solution') { return renderers[id](snapshot,view==='solution'); }
   function status(id,r) {
+    if (r.info && r.info.unanswered) return 'Not reached';
     if(r.correct) return r.info.timedOut && id!=='racer' ? 'Correct · submitted at the time limit' : 'Correct';
     return id==='racer' ? 'Target not reached' : r.info.timedOut ? 'Time limit reached' : 'Incorrect';
   }

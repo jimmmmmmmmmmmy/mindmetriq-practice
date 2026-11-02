@@ -478,5 +478,33 @@ class BrowserTests(unittest.TestCase):
         self.page.goto(self.base)
         self.assertEqual(self.page.locator('[data-id=swipe] .best').inner_text(), '')
 
+    def test_insights_practice_mock_plan_and_phone_width(self):
+        for width, height in [(320, 640), (390, 844)]:
+            self.page.set_viewport_size({'width': width, 'height': height})
+            self.page.goto(self.base)
+            self.assertIn('Numerical Insights', self.page.locator('main').inner_text())
+            self.assertIn('Full mock', self.page.locator('main').inner_text())
+            self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth + 1'))
+            self.page.goto(self.base + 'mock.html')
+            self.assertIn('45', self.page.locator('#plan .total').inner_text())
+            self.assertEqual(self.page.locator('#plan li').count(), 8)
+            self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth + 1'))
+        self.start('numerical-insights', 'test')
+        self.assertEqual(self.page.locator('#hTime').inner_text(), '15:00')
+        self.page.evaluate('__game.choose(__game.item.answer)')
+        self.page.clock.fast_forward(1600)
+        self.assertEqual(self.page.locator('#hNum').inner_text(), '2')
+        self.assertNotEqual(self.page.locator('#hTime').inner_text(), '15:00')
+        self.page.set_viewport_size({'width': 320, 'height': 640})
+        box = self.page.locator('#app').bounding_box()
+        self.assertAlmostEqual(box['width'] / box['height'], 9 / 16, delta=.02)
+        self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth + 1'))
+        self.start('numerical-insights')
+        for _ in range(4):
+            self.page.evaluate('__game.choose(__game.item.answer)')
+            self.advance(900)
+        self.assertEqual(self.page.locator('#endScore').inner_text(), '4 / 4')
+        self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth + 1'))
+
 if __name__ == '__main__':
     unittest.main()

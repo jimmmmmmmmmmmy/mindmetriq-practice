@@ -25,7 +25,8 @@
     swipe: { focus: 'Compare word meanings', strategy: 'Distinguish meaning from association: related words can still belong in Other.', difficulty: 'Higher tiers use less familiar vocabulary and finer distinctions between related meanings.' },
     wordlogic: { focus: 'Keep the relationship consistent', strategy: 'Name the relationship in the first pair, then apply it in the same direction to the second pair.', difficulty: 'Higher tiers use more specialised relationships and less familiar vocabulary.' },
     pipes: { focus: 'Trace a continuous route', strategy: 'Trace from one fixed end. Each pipe must open toward its neighbour, and the neighbour must open back.', difficulty: 'Higher tiers use longer routes, more scrambled pipes, and eventually a larger board.' },
-    spinner: { focus: 'Check every symbol pair', strategy: 'Check each pair for exactly one match: shape or shading. Matching both, or neither, breaks the rule.', difficulty: 'Higher tiers add wheel positions, another shape, and a third shading.' }
+    spinner: { focus: 'Check every symbol pair', strategy: 'Check each pair for exactly one match: shape or shading. Matching both, or neither, breaks the rule.', difficulty: 'Higher tiers add wheel positions, another shape, and a third shading.' },
+    insights: { focus: 'Read the exhibit, then calculate', strategy: 'Identify the row and column the question names before dividing, averaging, or finding a percentage. A calculator is allowed.', difficulty: 'Higher tiers move from a single lookup to percentages, percentage change, and two-step calculations.' }
   };
   function feedback(summary, id) {
     const g = guidance[id];
