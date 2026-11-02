@@ -31,23 +31,6 @@ npm run test:browser
 
 Each game also has a short practice round and a hard drill with 25% less time. A correct answer raises the next requested level and a miss lowers it, within levels 1–5. The result screen shows accuracy, response time, and difficulty. History is kept in `localStorage`. Best badges count standalone timed runs and full-mock sections, not practice or hard drill.
 
-## Solution review
-
-After a round, each question has **Show solution**. That view calls `js/solver.js`, which receives only an exported puzzle: the grid, words, wheel, pipes, or chart the generator just built. It does not read the stored answer, and it is not called while a timer is running. It does not open, scrape, or drive any assessment site.
-
-The solver is JavaScript, next to the generators, because the app has no build step and the review screen has to run in the same browser. A separate Python package would need a second copy of every puzzle.
-
-| Game | Method |
-|---|---|
-| Net the Numbers | Sum every legal placement. |
-| Number Racer | Exact subset search, shortest group first. |
-| Numerical Insights | Read the named cells from the table, chart, or passage, then evaluate that expression. |
-| Link Swipe and Word Logic | Look up this repo's own word lists. |
-| Shape Spinner | Reject rotations with the first pair, then test the rest. Exact on the survivors. |
-| Pipe Puzzle | Follow the start opening and spend the pipe inventory by search. |
-
-No learned model is included. These puzzles are small enough that the exact search is also the fast method, and the tests check it against the generator.
-
 ## Sources
 
 - [MindmetriQ game tasks and current question counts](https://www.testpartnership.com/gamified-assessment.html)

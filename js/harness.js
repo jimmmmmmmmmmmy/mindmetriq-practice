@@ -228,7 +228,7 @@
       <tbody>${summary.levels.map(r => `<tr><th scope="row">${r.level}</th><td>${r.correct} / ${r.total}</td><td>${r.total ? Math.round(100*r.correct/r.total)+"%" : "—"}</td><td>${r.total ? (r.used/r.total).toFixed(1)+"s" : "—"}</td></tr>`).join("")}</tbody></table>
       <p>${escape(guidance.difficulty)}</p></section>
       <section class="result-section" aria-labelledby="answerTitle"><h2 id="answerTitle">Review your answers</h2>
-        <p>Open any question after the round. Switch between your answer and the solution. The worked method stays on this screen.</p>
+        <p>Open any question. Switch between your submitted answer and the solution.</p>
         <div id="answerReviews">${MMQReview.list(G.id, results)}</div>
       </section>
       <details class="methodology"><summary>How to read your score</summary>

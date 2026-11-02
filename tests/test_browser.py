@@ -495,7 +495,6 @@ class BrowserTests(unittest.TestCase):
         self.page.clock.fast_forward(1600)
         self.assertEqual(self.page.locator('#hNum').inner_text(), '2')
         self.assertNotEqual(self.page.locator('#hTime').inner_text(), '15:00')
-        self.assertEqual(self.page.locator('.solver-trace').count(), 0)
         self.page.set_viewport_size({'width': 320, 'height': 640})
         box = self.page.locator('#app').bounding_box()
         self.assertAlmostEqual(box['width'] / box['height'], 9 / 16, delta=.02)
@@ -505,26 +504,7 @@ class BrowserTests(unittest.TestCase):
             self.page.evaluate('__game.choose(__game.item.answer)')
             self.advance(900)
         self.assertEqual(self.page.locator('#endScore').inner_text(), '4 / 4')
-        self.assertGreater(self.page.locator('.solver-trace').count(), 0)
         self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth + 1'))
-
-    def test_solution_method_is_hidden_until_the_round_ends(self):
-        self.start('net-the-numbers')
-        self.assertEqual(self.page.locator('.solver-trace').count(), 0)
-        self.correct('net-the-numbers')
-        self.assertEqual(self.page.locator('#sGame').get_attribute('class'), 'screen on')
-        self.assertEqual(self.page.locator('.solver-trace').count(), 0)
-        self.advance(1400)
-        for _ in range(2):
-            self.correct('net-the-numbers')
-            self.advance(1400)
-        self.assertEqual(self.page.locator('#sEnd').get_attribute('class'), 'screen on')
-        self.assertGreater(self.page.locator('.solver-trace').count(), 0)
-        self.assertIn('How to solve it', self.page.locator('#review-0').inner_text())
-        self.page.locator('#review-0').get_by_role('button', name='Your answer', exact=True).click()
-        self.assertEqual(self.page.locator('#review-0 .solver-trace').count(), 0)
-        self.page.locator('#review-0').get_by_role('button', name='Show solution', exact=True).click()
-        self.assertGreater(self.page.locator('#review-0 .solver-trace').count(), 0)
 
 if __name__ == '__main__':
     unittest.main()
