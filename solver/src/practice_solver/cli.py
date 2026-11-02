@@ -25,6 +25,8 @@ def _export(args: argparse.Namespace) -> None:
     ]
     if args.lexicon:
         command.extend(["--lexicon", str(args.lexicon)])
+    if args.games:
+        command.extend(["--games", args.games])
     subprocess.run(command, check=True)
 
 
@@ -43,16 +45,19 @@ def _solve(args: argparse.Namespace) -> None:
             rotation = int(model(outer, inner, count).argmax(dim=1)[0])
         print(json.dumps({"rotation": rotation}))
         return
+    from practice_solver.decode import best_first_decode
     model = load_model("pipes", weights / "pipes.pt")
-    grids, _, _ = pipe_tensors([record | {"truth": {"cells": record["puzzle"]["cells"]}}])
-    with torch.no_grad():
-        predicted = model(grids).argmax(dim=1)[0]
     puzzle = record["puzzle"]
-    cells = []
-    for index, cell in enumerate(puzzle["cells"]):
+    grids, _, _ = pipe_tensors([record | {"truth": {"cells": puzzle["cells"]}}])
+    with torch.no_grad():
+        log_probs = torch.log_softmax(model(grids), dim=1)[0]
+    table = []
+    for index in range(puzzle["N"] * puzzle["N"]):
         y, x = index // puzzle["N"], index % puzzle["N"]
-        mask = int(predicted[y, x]) if cell["t"] == "p" else cell["m"]
-        cells.append({"t": cell["t"], "m": mask})
+        table.append(log_probs[:, y, x].tolist())
+    cells, _expanded = best_first_decode(puzzle, table)
+    if cells is None:
+        raise SystemExit("Network-guided search did not find a connected route")
     print(json.dumps({"cells": cells}))
 
 
@@ -64,12 +69,14 @@ def main(argv: list[str] | None = None) -> None:
     export.add_argument("--seed", type=int, default=1000)
     export.add_argument("--out", type=Path, required=True)
     export.add_argument("--lexicon", type=Path)
+    export.add_argument("--games", default="")
     export.set_defaults(func=_export)
     training = sub.add_parser("train", help="Train spinner and pipe networks")
     training.add_argument("--data", type=Path, required=True)
     training.add_argument("--out-dir", type=Path, default=WEIGHTS)
-    training.add_argument("--epochs", type=int, default=40)
-    training.set_defaults(func=lambda args: train(args.data, args.out_dir, args.epochs))
+    training.add_argument("--epochs", type=int, default=30)
+    training.add_argument("--games", default="spinner,pipes")
+    training.set_defaults(func=lambda args: train(args.data, args.out_dir, args.epochs, tuple(args.games.split(","))))
     evaluation = sub.add_parser("eval", help="Score exact solvers and saved networks")
     evaluation.add_argument("--data", type=Path, required=True)
     evaluation.add_argument("--weights", type=Path, default=WEIGHTS)

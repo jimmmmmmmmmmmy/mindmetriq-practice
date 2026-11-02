@@ -48,27 +48,42 @@ function records(count, seed) {
   const words = createVerbal(seeded(seed + 2));
   const insights = createInsights(seeded(seed + 3));
   const lines = [];
+  const wanted = new Set(String(arg("--games", "net,racer,swipe,wordlogic,pipes,spinner,insights")).split(",").filter(Boolean));
   for (let i = 0; i < count; i++) {
     if (i > 0 && i % 20 === 0) words.reset();
     const level = (i % 5) + 1;
-    const net = games.net.newItem(level);
-    lines.push({ game: "net", level, puzzle: { g: net.g, sh: { cells: net.sh.cells, w: net.sh.w, h: net.sh.h } }, truth: { x: net.bp[0], y: net.bp[1], sum: net.best } });
-    const racer = games.racer.newItem(level);
-    lines.push({ game: "racer", level, puzzle: { nums: racer.nums, target: racer.target }, truth: { indices: racer.sol, target: racer.target } });
-    const swipe = words.swipe(level);
-    lines.push({ game: "swipe", level, puzzle: { words: [swipe[0], swipe[1]] }, truth: { category: swipe[2] } });
-    const word = words.analogy(level);
-    lines.push({ game: "wordlogic", level, puzzle: { left: [word.b[1], word.b[2]], stem: word.b[3], options: word.opts }, truth: { answer: word.b[4] } });
-    const pipes = games.pipes.newItem(level);
-    lines.push({ game: "pipes", level, puzzle: { N: pipes.N, s: pipes.s, t: pipes.t, cells: pipes.cells.map(cell => ({ t: cell.t, m: cell.m })) }, truth: { cells: pipeTruth(pipes) } });
-    const spinner = games.spinner.newItem(level);
-    lines.push({ game: "spinner", level, puzzle: { n: spinner.n, inner: spinner.inner, outer: spinner.outer }, truth: { rotation: spinner.sol } });
-    const item = insights.newItem(level);
-    lines.push({
-      game: "insights", level,
-      puzzle: { kind: item.kind, title: item.title, unit: item.unit, headers: item.headers, rows: item.rows, passage: item.passage, prompt: item.prompt, options: item.options },
-      truth: { index: item.answer, value: evaluate(item.check) }
-    });
+    if (wanted.has("net")) {
+      const net = games.net.newItem(level);
+      lines.push({ game: "net", level, puzzle: { g: net.g, sh: { cells: net.sh.cells, w: net.sh.w, h: net.sh.h } }, truth: { x: net.bp[0], y: net.bp[1], sum: net.best } });
+    }
+    if (wanted.has("racer")) {
+      const racer = games.racer.newItem(level);
+      lines.push({ game: "racer", level, puzzle: { nums: racer.nums, target: racer.target }, truth: { indices: racer.sol, target: racer.target } });
+    }
+    if (wanted.has("swipe")) {
+      const swipe = words.swipe(level);
+      lines.push({ game: "swipe", level, puzzle: { words: [swipe[0], swipe[1]] }, truth: { category: swipe[2] } });
+    }
+    if (wanted.has("wordlogic")) {
+      const word = words.analogy(level);
+      lines.push({ game: "wordlogic", level, puzzle: { left: [word.b[1], word.b[2]], stem: word.b[3], options: word.opts }, truth: { answer: word.b[4] } });
+    }
+    if (wanted.has("pipes")) {
+      const pipes = games.pipes.newItem(level);
+      lines.push({ game: "pipes", level, puzzle: { N: pipes.N, s: pipes.s, t: pipes.t, cells: pipes.cells.map(cell => ({ t: cell.t, m: cell.m })) }, truth: { cells: pipeTruth(pipes) } });
+    }
+    if (wanted.has("spinner")) {
+      const spinner = games.spinner.newItem(level);
+      lines.push({ game: "spinner", level, puzzle: { n: spinner.n, inner: spinner.inner, outer: spinner.outer }, truth: { rotation: spinner.sol } });
+    }
+    if (wanted.has("insights")) {
+      const item = insights.newItem(level);
+      lines.push({
+        game: "insights", level,
+        puzzle: { kind: item.kind, title: item.title, unit: item.unit, headers: item.headers, rows: item.rows, passage: item.passage, prompt: item.prompt, options: item.options },
+        truth: { index: item.answer, value: evaluate(item.check) }
+      });
+    }
   }
   return lines;
 }

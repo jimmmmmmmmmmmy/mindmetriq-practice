@@ -1,71 +1,214 @@
 {
-  "exact": {
-    "net": {
-      "correct": 40,
-      "total": 40,
-      "seconds": 0.00022251800010053557,
-      "per_puzzle_ms": 0.005562950002513389
+  "fixture": {
+    "exact": {
+      "net": {
+        "correct": 40,
+        "total": 40,
+        "seconds": 0.00021666400016329135,
+        "per_puzzle_ms": 0.005416600004082284
+      },
+      "racer": {
+        "correct": 40,
+        "total": 40,
+        "seconds": 0.006806883000081143,
+        "per_puzzle_ms": 0.17017207500202858
+      },
+      "swipe": {
+        "correct": 40,
+        "total": 40,
+        "seconds": 0.000571150999803649,
+        "per_puzzle_ms": 0.014278774995091226
+      },
+      "wordlogic": {
+        "correct": 40,
+        "total": 40,
+        "seconds": 5.856600000697654e-05,
+        "per_puzzle_ms": 0.0014641500001744134
+      },
+      "insights": {
+        "correct": 40,
+        "total": 40,
+        "seconds": 0.0008200819997910003,
+        "per_puzzle_ms": 0.020502049994775007
+      },
+      "spinner": {
+        "correct": 40,
+        "total": 40,
+        "seconds": 0.00012252399983481155,
+        "per_puzzle_ms": 0.0030630999958702887
+      },
+      "pipes": {
+        "correct": 40,
+        "total": 40,
+        "seconds": 0.0013477180000336375,
+        "per_puzzle_ms": 0.03369295000084094
+      }
     },
-    "racer": {
-      "correct": 40,
-      "total": 40,
-      "seconds": 0.006835405999936484,
-      "per_puzzle_ms": 0.1708851499984121
-    },
-    "swipe": {
-      "correct": 40,
-      "total": 40,
-      "seconds": 0.0005663779998030805,
-      "per_puzzle_ms": 0.014159449995077011
-    },
-    "wordlogic": {
-      "correct": 40,
-      "total": 40,
-      "seconds": 6.485199992312118e-05,
-      "per_puzzle_ms": 0.0016212999980780296
-    },
-    "insights": {
-      "correct": 40,
-      "total": 40,
-      "seconds": 0.0008230119997278962,
-      "per_puzzle_ms": 0.020575299993197405
-    },
-    "spinner": {
-      "correct": 40,
-      "total": 40,
-      "seconds": 0.00013566799998443457,
-      "per_puzzle_ms": 0.0033916999996108643
-    },
-    "pipes": {
-      "correct": 40,
-      "total": 40,
-      "seconds": 0.0013858370002708398,
-      "per_puzzle_ms": 0.034645925006770995
+    "ml": {
+      "spinner": {
+        "correct": 39,
+        "total": 40,
+        "seconds": 0.0021979199996167154,
+        "per_puzzle_ms": 0.054947999990417884
+      },
+      "pipes": {
+        "cell_correct": 387,
+        "pipe_cells": 416,
+        "puzzle_matches_truth": 25,
+        "valid_routes": 25,
+        "beam_solved": 40,
+        "beam_width": 4,
+        "guided_solved": 40,
+        "guided_expansions": 442,
+        "total": 40,
+        "forward_seconds": 0.0042145330003222625,
+        "beam_seconds": 0.004019586999675084,
+        "guided_seconds": 0.0017433009998057969,
+        "seconds": 0.0042145330003222625,
+        "per_puzzle_ms": 0.10536332500805656,
+        "beam_per_puzzle_ms": 0.10048967499187711,
+        "guided_per_puzzle_ms": 0.04358252499514492,
+        "pure_by_level": {
+          "1": {
+            "correct": 8,
+            "total": 8
+          },
+          "2": {
+            "correct": 8,
+            "total": 8
+          },
+          "3": {
+            "correct": 4,
+            "total": 8
+          },
+          "4": {
+            "correct": 2,
+            "total": 8
+          },
+          "5": {
+            "correct": 3,
+            "total": 8
+          }
+        },
+        "beam_by_level": {
+          "1": {
+            "correct": 8,
+            "total": 8
+          },
+          "2": {
+            "correct": 8,
+            "total": 8
+          },
+          "3": {
+            "correct": 8,
+            "total": 8
+          },
+          "4": {
+            "correct": 8,
+            "total": 8
+          },
+          "5": {
+            "correct": 8,
+            "total": 8
+          }
+        },
+        "guided_by_level": {
+          "1": {
+            "correct": 8,
+            "total": 8
+          },
+          "2": {
+            "correct": 8,
+            "total": 8
+          },
+          "3": {
+            "correct": 8,
+            "total": 8
+          },
+          "4": {
+            "correct": 8,
+            "total": 8
+          },
+          "5": {
+            "correct": 8,
+            "total": 8
+          }
+        }
+      }
     }
   },
-  "ml": {
-    "spinner": {
-      "correct": 39,
-      "total": 40,
-      "seconds": 0.0034098199998879863,
-      "per_puzzle_ms": 0.08524549999719966
+  "holdout_counts": {
+    "beam_solved": 200,
+    "guided_solved": 200,
+    "valid_routes": 141,
+    "beam_by_level": {
+      "1": {
+        "correct": 40,
+        "total": 40
+      },
+      "2": {
+        "correct": 40,
+        "total": 40
+      },
+      "3": {
+        "correct": 40,
+        "total": 40
+      },
+      "4": {
+        "correct": 40,
+        "total": 40
+      },
+      "5": {
+        "correct": 40,
+        "total": 40
+      }
     },
-    "pipes": {
-      "cell_correct": 366,
-      "pipe_cells": 416,
-      "puzzle_matches_truth": 25,
-      "valid_routes": 25,
-      "total": 40,
-      "seconds": 0.004658418999952119,
-      "per_puzzle_ms": 0.11646047499880297
-    }
-  },
-  "holdout_seed_4242_count_200": {
-    "note": "Measured once on a disjoint export (--seed 4242 --count 200), not the committed fixture.",
-    "exact": "200/200 on every game",
-    "spinner_ml": "199/200 (99.5%), 0.007 ms/puzzle batched",
-    "pipes_ml": "cells 1825/2043 (89.3%), full board 117/200 (58.5%), valid route 118/200 (59.0%), 0.047 ms/puzzle batched",
-    "pipes_exact_ms": 0.033,
-    "spinner_exact_ms": 0.003
+    "pure_by_level": {
+      "1": {
+        "correct": 40,
+        "total": 40
+      },
+      "2": {
+        "correct": 40,
+        "total": 40
+      },
+      "3": {
+        "correct": 25,
+        "total": 40
+      },
+      "4": {
+        "correct": 23,
+        "total": 40
+      },
+      "5": {
+        "correct": 13,
+        "total": 40
+      }
+    },
+    "guided_by_level": {
+      "1": {
+        "correct": 40,
+        "total": 40
+      },
+      "2": {
+        "correct": 40,
+        "total": 40
+      },
+      "3": {
+        "correct": 40,
+        "total": 40
+      },
+      "4": {
+        "correct": 40,
+        "total": 40
+      },
+      "5": {
+        "correct": 40,
+        "total": 40
+      }
+    },
+    "cell_correct": 1917,
+    "pipe_cells": 2043,
+    "guided_expansions": 2191
   }
 }

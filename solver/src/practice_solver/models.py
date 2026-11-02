@@ -95,20 +95,36 @@ def pipe_tensors(records: list[dict]) -> tuple[torch.Tensor, torch.Tensor, torch
 
 
 class PipeNet(nn.Module):
+    """Local convolutions plus a dilated path and a board-wide vector.
+
+    A 6 by 6 grid is small, but a 3 by 3 stack still misses the far end of a
+    route. Dilated layers and a pooled summary give every cell that context.
+    """
+
     def __init__(self) -> None:
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(9, 64, 3, padding=1),
-            nn.ReLU(),
+        self.stem = nn.Sequential(nn.Conv2d(9, 64, 3, padding=1), nn.ReLU())
+        self.local = nn.Sequential(
             nn.Conv2d(64, 64, 3, padding=1),
             nn.ReLU(),
             nn.Conv2d(64, 64, 3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(64, 16, 1),
         )
+        self.wide = nn.Sequential(
+            nn.Conv2d(64, 64, 3, padding=2, dilation=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, 3, padding=4, dilation=4),
+            nn.ReLU(),
+        )
+        self.pool = nn.Linear(64, 64)
+        self.head = nn.Conv2d(128, 16, 1)
 
     def forward(self, grids: torch.Tensor) -> torch.Tensor:
-        return self.net(grids)
+        hidden = self.stem(grids)
+        hidden = hidden + self.local(hidden)
+        hidden = hidden + self.wide(hidden)
+        summary = self.pool(hidden.mean(dim=(2, 3)))[:, :, None, None].expand_as(hidden)
+        return self.head(torch.cat((hidden, summary), dim=1))
 
 
 def save_model(model: nn.Module, path: Path) -> None:
