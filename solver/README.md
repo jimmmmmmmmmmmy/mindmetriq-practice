@@ -57,11 +57,40 @@ Adapters live in `practice_solver/ingest.py` (`ADAPTERS`). A page with labels no
 | Number Racer | `Collectable n` blocks ordered by vertical position, one `Target n` | nothing; the blocks and the target are the whole item |
 | Net the Numbers | numbered cells placed on the 5 by 5 lattice (blank cells are simply absent), plus the `Glowing net` box | the net's interior cells. The box gives width and height only, so the adapter **refuses** the page until you pass `--net-shape 110/011`, rows read top to bottom with `1` as a covered cell. `--net-box` accepts the box as the shape, for nets that really are rectangles. |
 
-The publisher's own technical manual (Figure 1) shows the net as a four-cell Z tetromino inside a 3 by 2 box, so treating the box as the shape is wrong in general and is opt-in for that reason. Boxes across five saved pages measured 3×3, 2×3, 3×3, 3×2 and 2×3, so the net is not one fixed shape across items either; the shape has to come from the page you saved.
+The publisher's own technical manual (Figure 1) shows the net as a four-cell Z tetromino inside a 3 by 2 box, so treating the box as the shape is wrong in general and is opt-in for that reason. Boxes across five saved pages measured 3×3, 2×3, 3×3, 3×2 and 2×3, so the net is not one fixed shape across items either.
+
+### Reading the net from a screenshot
+
+A saved page has no canvas pixels, so pair the HTML with a screenshot and the shape comes from the rendering: `ingest` picks up `page.png` sitting next to `page.html` automatically, or pass `--image`.
+
+`practice_solver/pixels.py` classifies each cell inside the net's box: the net is filled a shade darker than an empty cell (216,218,220 against 242 and 249 in the publisher's own screenshot), and its outline is one closed contour. A cell is covered when the outside cannot reach it — which also catches cells under a number, whose tile keeps its colour and whose fill therefore says nothing. The result must be one connected piece, otherwise the scale or the crop is wrong and it raises rather than writing a guess.
+
+The palette thresholds are constants measured off that screenshot. They are the one part of this adapter that is not verified against a live page yet: the first capture from a real session either reproduces the shape or it does not.
 
 The grid, cell size, and pitch are constants read off the product's canvas (`NET_LAYOUT`). Every marker is checked against that lattice, so a renderer change fails loudly instead of quietly shifting numbers to the wrong cell. The question counter is taken from the marker sitting immediately left of `of N`, which keeps bare numbers like a countdown timer out of the grid.
 
-No capture step is automated here: the package still opens no browser and touches no network. Snapshots are local files.
+The package itself opens no browser and touches no network; snapshots and screenshots are local files. A Playwright capture script sits next to the package, below.
+
+## Capture a live screen
+
+`solver/scripts/live_capture.py` drives a browser with Playwright, reads the overlay and takes one canvas screenshot per capture, solves it, and optionally shows the answer on the page. It lives outside the package on purpose: `practice_solver` still imports no browser and touches no network.
+
+```bash
+pip install -e "./solver[live]"
+python -m playwright install chromium
+
+# open the item yourself in Chrome started with --remote-debugging-port=9222, then
+python solver/scripts/live_capture.py --cdp http://localhost:9222 --count 3 --overlay
+
+# or let the script open the page
+python solver/scripts/live_capture.py --url <page> --count 1
+```
+
+Each capture writes `captures/page-0001.html` and `captures/page-0001.png`, so an item can be re-ingested offline later. Attaching to your own browser means no credentials pass through the script.
+
+On the repository's own harness page (`solver/tests/fixtures/net-harness.html`, the same canvas size, palette and overlay as the product) a capture, the pixel read, and the exact solve take about 210 ms in total, of which 70 ms is the screenshot.
+
+Use it on your own practice or demo session. Running it during a real assessment would defeat the assessment and breach the publisher's terms.
 
 ## Solve one record
 

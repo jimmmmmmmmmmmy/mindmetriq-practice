@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Net the Numbers (capture harness)</title>
+<style>
+  body { margin: 0; background: #f9f5f5; font-family: sans-serif; }
+  canvas { display: block; }
+  .mindmetriq-accessibility { position: absolute; }
+</style>
+</head>
+<body>
+<!-- A stand-in for the product's Net the Numbers screen: same canvas size, the
+     same lattice, colours and accessibility overlay, but drawn locally so the
+     capture and pixel paths can be tested without a live session. -->
+<canvas id="mindmetriq" width="744" height="1322" style="width: 372px; height: 661px; background-color: rgb(249, 245, 245);"></canvas>
+<div id="overlay"></div>
+<script>
+const LAYOUT = { left: 36.5333, top: 172.933, pitch: 70.611, size: 56.4889, pad: 7.061 };
+const GRID = [
+  [9, 0, 0, 0, 0],
+  [0, 0, 0, 0, 7],
+  [6, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 0, 4, 0, 0],
+];
+// A Z tetromino inside a 2 by 2 box at column 1, row 1.
+const NET = [[1, 1], [2, 1], [2, 2]];
+
+const canvas = document.getElementById('mindmetriq');
+const ctx = canvas.getContext('2d');
+ctx.scale(2, 2);
+const cell = (column, row) => ({
+  x: LAYOUT.left + column * LAYOUT.pitch + (LAYOUT.pitch - LAYOUT.size) / 2,
+  y: LAYOUT.top + row * LAYOUT.pitch + (LAYOUT.pitch - LAYOUT.size) / 2,
+});
+
+for (let row = 0; row < 5; row++) {
+  for (let column = 0; column < 5; column++) {
+    const { x, y } = cell(column, row);
+    ctx.fillStyle = '#f2f2f2';
+    ctx.fillRect(x, y, LAYOUT.size, LAYOUT.size);
+    const value = GRID[row][column];
+    if (value) {
+      ctx.fillStyle = value > 0 ? '#4CD5B0' : '#1B1C40';
+      ctx.fillRect(x, y, LAYOUT.size, LAYOUT.size);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(value), x + LAYOUT.size / 2, y + LAYOUT.size / 2);
+    }
+  }
+}
+
+ctx.fillStyle = '#d8dadc';
+for (const [column, row] of NET) {
+  const { x, y } = cell(column, row);
+  ctx.fillRect(x, y, LAYOUT.size, LAYOUT.size);
+}
+ctx.strokeStyle = '#484848';
+ctx.lineWidth = 2;
+for (const [column, row] of NET) {
+  const { x, y } = cell(column, row);
+  const edges = [
+    [[x, y], [x + LAYOUT.size, y], [column, row - 1]],
+    [[x, y + LAYOUT.size], [x + LAYOUT.size, y + LAYOUT.size], [column, row + 1]],
+    [[x, y], [x, y + LAYOUT.size], [column - 1, row]],
+    [[x + LAYOUT.size, y], [x + LAYOUT.size, y + LAYOUT.size], [column + 1, row]],
+  ];
+  for (const [[x1, y1], [x2, y2], neighbour] of edges) {
+    if (NET.some(([c, r]) => c === neighbour[0] && r === neighbour[1])) continue;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+}
+
+const overlay = document.getElementById('overlay');
+function marker(left, top, width, height, label) {
+  const div = document.createElement('div');
+  div.className = 'mindmetriq-accessibility';
+  div.setAttribute('role', 'text');
+  div.setAttribute('aria-label', label);
+  div.style.cssText = `left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px;`;
+  overlay.appendChild(div);
+}
+marker(175.386, 67.12, 61.227, 19.0133, 'Practice');
+marker(36.5333, 67.12, 7.14901, 19.0133, '1');
+marker(51.3704, 67.12, 34.224, 19.0133, 'of 3');
+marker(358.107, 67.12, 17.3592, 19.0133, '14');
+for (let row = 0; row < 5; row++) {
+  for (let column = 0; column < 5; column++) {
+    const value = GRID[row][column];
+    if (!value) continue;
+    marker(
+      LAYOUT.left + column * LAYOUT.pitch,
+      LAYOUT.top + row * LAYOUT.pitch,
+      LAYOUT.size,
+      LAYOUT.size,
+      value < 0 ? `Minus ${-value}` : String(value),
+    );
+  }
+}
+marker(
+  LAYOUT.left + 1 * LAYOUT.pitch - LAYOUT.pad,
+  LAYOUT.top + 1 * LAYOUT.pitch - LAYOUT.pad,
+  2 * LAYOUT.pitch,
+  2 * LAYOUT.pitch,
+  'Glowing net',
+);
+</script>
+</body>
+</html>

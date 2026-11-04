@@ -19,25 +19,15 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
+from practice_solver.errors import SnapshotError
 from practice_solver.exact import solve as exact_solve
+from practice_solver.layout import LAYOUT_TOLERANCE, NET_LAYOUT
 
 CLASS_TOKEN = "mindmetriq-accessibility"
 PX = re.compile(r"([a-z-]+)\s*:\s*(-?\d+(?:\.\d+)?)px")
 NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 MINUS_WORDS = re.compile(r"\bminus\s+", re.IGNORECASE)
 VALUE_LABEL = re.compile(r"(?:minus\s+)?-?\d+", re.IGNORECASE)
-
-# Canvas layout of the product's Net the Numbers screen, in CSS pixels, read
-# off five saved pages. The pitch is a cell plus its gap, and the net artwork
-# starts one tenth of a pitch left of and above the cell it covers. Every
-# marker is checked against this lattice; a page that does not fit raises
-# instead of silently landing on the wrong cell.
-NET_LAYOUT = {"left": 36.5333, "top": 172.933, "pitch": 70.611, "size": 56.4889, "pad": 7.061, "n": 5}
-LAYOUT_TOLERANCE = 1.0
-
-
-class SnapshotError(ValueError):
-    """The snapshot is not a board this module can read."""
 
 
 @dataclass(frozen=True)
@@ -91,12 +81,38 @@ def parse_snapshot(text: str, class_token: str = CLASS_TOKEN) -> list[Marker]:
 
 
 def read_snapshot(path: Path, class_token: str = CLASS_TOKEN) -> list[Marker]:
+    return parse_snapshot(_read(path), class_token)
+
+
+def _read(path: Path) -> str:
     path = Path(path)
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        return path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
         raise SnapshotError(f"Cannot read {path}: {exc}") from exc
-    return parse_snapshot(text, class_token)
+
+
+class _Canvas(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.style: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "canvas" and self.style is None:
+            self.style = dict(attrs).get("style") or ""
+
+
+def canvas_css(text: str) -> tuple[float, float] | None:
+    """The canvas size the page states, in CSS pixels; the scale for a screenshot."""
+    parser = _Canvas()
+    parser.feed(text)
+    parser.close()
+    if not parser.style:
+        return None
+    style = {name: float(value) for name, value in PX.findall(parser.style)}
+    if "width" in style and "height" in style:
+        return style["width"], style["height"]
+    return None
 
 
 def _value(label: str) -> int:
@@ -180,15 +196,26 @@ def net(markers: list[Marker], options: dict) -> tuple[dict, list[str]]:
     row = round(((box.top or 0) + layout["pad"] - layout["top"]) / layout["pitch"])
     notes: list[str] = []
     spec = options.get("net_shape")
+    image = options.get("image")
     if spec:
         shape = _shape(spec)
+        notes.append("net shape given on the command line")
+    elif image is not None:
+        from practice_solver.pixels import net_shape
+
+        canvas = options.get("canvas")
+        if not canvas:
+            raise SnapshotError("Reading the net from a screenshot needs the canvas size in CSS pixels")
+        shape = net_shape(image, (box.left or 0, box.top or 0, box.width or 0, box.height or 0), canvas, layout)
+        notes.append(f"net shape read from the screenshot ({len(shape['cells'])} cells)")
     elif options.get("net_box"):
         shape = {"cells": [[x, y] for y in range(height) for x in range(width)], "w": width, "h": height}
         notes.append(f"net shape taken from the {width} by {height} box, as requested by net_box")
     else:
         raise SnapshotError(
             f"the overlay carries only the net's {width} by {height} box, not its cells; "
-            "pass --net-shape (rows of 0/1, e.g. 110/011) or --net-box to accept the box as the shape"
+            "pass --net-shape (rows of 0/1, e.g. 110/011), --image with a canvas screenshot, "
+            "or --net-box to accept the box as the shape"
         )
     puzzle = {"g": grid, "sh": shape, "_net": [column, row]}
     return puzzle, notes
@@ -270,7 +297,13 @@ def record_from_snapshot(
     path: Path, game: str | None = None, level: str = "unknown", options: dict | None = None
 ) -> tuple[dict, list[str]]:
     """One JSONL record from one snapshot, plus any board warnings."""
-    markers = read_snapshot(path)
+    options = dict(options or {})
+    text = _read(path)
+    if options.get("image") is not None and not options.get("canvas"):
+        canvas = canvas_css(text)
+        if canvas:
+            options["canvas"] = canvas
+    markers = parse_snapshot(text)
     name, puzzle, meta, notes = board_from_markers(markers, game, options)
     warnings = notes + validate(name, puzzle)
     try:
@@ -290,6 +323,9 @@ def record_from_snapshot(
         "truth": truth,
         "source": {"kind": "dom-snapshot", "file": Path(path).name, **meta},
     }
+    image = options.get("image")
+    if isinstance(image, (str, Path)):
+        record["source"]["image"] = Path(image).name
     return record, warnings
 
 
@@ -304,8 +340,15 @@ def ingest(
     records: list[dict] = []
     report: list[str] = []
     for path in paths:
+        settings = dict(options or {})
+        if settings.get("image") is None:
+            for suffix in (".png", ".PNG", ".jpg", ".jpeg"):
+                sibling = Path(path).with_suffix(suffix)
+                if sibling.exists():
+                    settings["image"] = sibling
+                    break
         try:
-            record, warnings = record_from_snapshot(path, game, level, options)
+            record, warnings = record_from_snapshot(path, game, level, settings)
         except SnapshotError as exc:
             if not skip_invalid:
                 raise

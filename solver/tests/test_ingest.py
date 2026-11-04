@@ -208,3 +208,28 @@ def test_net_cli_writes_every_page(tmp_path):
     assert all(row["truth"]["derived"] == "exact" for row in rows)
     assert json.dumps(rows[0])  # serialisable as written
 
+
+def test_sibling_screenshot_supplies_the_net_shape(tmp_path):
+    """A capture writes page.html next to page.png; ingest should pair them."""
+    from PIL import Image, ImageDraw
+
+    from practice_solver.layout import NET_LAYOUT
+
+    html = (FIXTURES / "net-practice-1.html").read_text(encoding="utf-8")
+    snapshot = tmp_path / "page-0001.html"
+    snapshot.write_text(html, encoding="utf-8")
+    scale = 2.0
+    image = Image.new("RGB", (int(372 * scale), int(661 * scale)), (249, 245, 245))
+    pen = ImageDraw.Draw(image)
+    pitch = NET_LAYOUT["pitch"] * scale
+    left = (NET_LAYOUT["left"] + NET_LAYOUT["pitch"]) * scale
+    top = (NET_LAYOUT["top"] + NET_LAYOUT["pitch"]) * scale
+    for column, row in ((0, 0), (1, 0), (1, 1)):
+        x, y = left + column * pitch, top + row * pitch
+        pen.rectangle([x + 2, y + 2, x + pitch - 2, y + pitch - 2], fill=(216, 218, 220))
+    image.save(snapshot.with_suffix(".png"))
+
+    records, report = ingest([snapshot])
+    assert records[0]["puzzle"]["sh"]["cells"] == [[0, 0], [1, 0], [1, 1]]
+    assert any("from the screenshot" in line for line in report)
+

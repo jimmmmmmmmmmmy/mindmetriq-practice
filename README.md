@@ -43,9 +43,10 @@ pip install -e "./solver[dev]"
 practice-solver ingest snapshots/racer-q1.html --out records/racer.jsonl
 practice-solver solve records/racer.jsonl              # exact
 practice-solver eval --data records/racer.jsonl        # accuracy report
+python solver/scripts/live_capture.py --cdp http://localhost:9222 --overlay   # live, Playwright
 ```
 
-Every game has an exact solver. Shape Spinner and Pipe Puzzle also have trained networks scored against those exact solvers, including on seeds the models never saw. Captured records are tagged `distribution: mindmetriq-dom` and their labels are marked `derived: exact`, so real pages never get mixed with generated training data or mistaken for a human answer key. See [solver/README.md](solver/README.md) for the accuracy tables and validity limits.
+Captured records are tagged `distribution: mindmetriq-dom` and their labels are marked `derived: exact`, so real pages never get mixed with generated training data or mistaken for a human answer key. Every game has an exact solver; Shape Spinner and Pipe Puzzle also have trained networks scored against those exact solvers on seeds the models never saw. Two of the six games need more than the DOM: Number Racer is fully described by its overlay, while Net the Numbers hides the net's shape, which is read from a canvas screenshot instead. See [solver/README.md](solver/README.md) for the accuracy tables and validity limits.
 
 ## Sources
 
