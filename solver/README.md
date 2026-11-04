@@ -88,6 +88,35 @@ python solver/scripts/live_capture.py --url <page> --count 1
 
 Each capture writes `captures/page-0001.html` and `captures/page-0001.png`, so an item can be re-ingested offline later. Attaching to your own browser means no credentials pass through the script.
 
+### Try it on the public demo
+
+The publisher's demo needs no account:
+
+```
+https://www.tptests.com/Candidate/MindmetriqDemo?name=NetTheNumbers&lang=English
+https://www.tptests.com/Candidate/MindmetriqDemo?name=NumberRacer&lang=English
+```
+
+The page fits its canvas to the window and lays the board out proportionally; a **412 px wide window gives exactly the 372 by 661 canvas** the layout constants were measured on. `live_capture.py` defaults to that width, and the adapter rescales the lattice for any other canvas width it is given.
+
+Two ways to run it, both driven by you clicking through the demo:
+
+```bash
+# A. attach to your own Chrome, click Start yourself, script reports each item
+#    (Chrome must be started fresh with the debug port and a separate profile)
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9222 --user-data-dir=/tmp/mmq-chrome \
+  "https://www.tptests.com/Candidate/MindmetriqDemo?name=NetTheNumbers&lang=English"
+python solver/scripts/live_capture.py --cdp http://localhost:9222 --watch 600 --overlay
+
+# B. let the script own the window; click Instructions and the guides there
+python solver/scripts/live_capture.py \
+  --url "https://www.tptests.com/Candidate/MindmetriqDemo?name=NetTheNumbers&lang=English" \
+  --watch 600 --overlay --keep-open
+```
+
+`--watch` polls once a second and prints each *distinct* item once, so instruction screens and half-drawn frames are ignored. `--keep-open` keeps the window alive after the watch ends.
+
 On the repository's own harness page (`solver/tests/fixtures/net-harness.html`, the same canvas size, palette and overlay as the product) a capture, the pixel read, and the exact solve take about 210 ms in total, of which 70 ms is the screenshot.
 
 Use it on your own practice or demo session. Running it during a real assessment would defeat the assessment and breach the publisher's terms.

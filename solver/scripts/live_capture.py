@@ -50,17 +50,18 @@ OVERLAY = """(text) => {
 }"""
 
 
-def grab(page, out: Path, index: int) -> tuple[Path, Path | None]:
-    """Write the DOM and a canvas screenshot; return both paths."""
+def grab(page, out: Path, index: int) -> tuple[Path, Path | None, tuple[float, float] | None]:
+    """Write the DOM and a canvas screenshot; return both paths and the canvas box."""
     html = page.evaluate("document.documentElement.outerHTML")
     snapshot = out / f"page-{index:04d}.html"
     snapshot.write_text(html, encoding="utf-8")
     canvas = page.query_selector("canvas")
     if canvas is None:
-        return snapshot, None
+        return snapshot, None, None
+    box = canvas.bounding_box()
     image = snapshot.with_suffix(".png")
     canvas.screenshot(path=str(image))
-    return snapshot, image
+    return snapshot, image, (box["width"], box["height"]) if box else None
 
 
 def describe(record: dict, answer: dict) -> str:
@@ -83,6 +84,65 @@ def attach(playwright, args):
     return browser, page
 
 
+def one_round(page, args, options: dict, index: int, wait: bool = False) -> dict | None:
+    """Capture the current screen, solve it, and print. Returns the record."""
+    if wait:
+        page.wait_for_selector(".mindmetriq-accessibility", timeout=args.timeout * 1000)
+    started = time.perf_counter()
+    snapshot, image, canvas = grab(page, args.out, index)
+    capture_ms = (time.perf_counter() - started) * 1000
+    record, notes = record_from_snapshot(
+        snapshot,
+        args.game or None,
+        args.level,
+        {**options, **({"image": image} if image else {}), **({"canvas": canvas} if canvas else {})},
+    )
+    answer = solve(record)
+    total_ms = (time.perf_counter() - started) * 1000
+    text = describe(record, answer)
+    print(f"[{index}] {record['game']}: {text}   capture {capture_ms:.0f} ms, total {total_ms:.0f} ms", flush=True)
+    for note in notes:
+        print(f"      note: {note}", file=sys.stderr)
+    if args.json:
+        print(json.dumps(record), flush=True)
+    if args.overlay:
+        page.evaluate(OVERLAY, f"{record['game']}\n{text}")
+    return record
+
+
+def watch(page, args, options: dict) -> None:
+    """Poll a page you are playing, solving each distinct item once."""
+    deadline = time.time() + args.watch
+    seen: set[str] = set()
+    index = 0
+    while time.time() < deadline:
+        try:
+            snapshot, image, canvas = grab(page, args.out, index)
+            record, _notes = record_from_snapshot(
+                snapshot,
+                args.game or None,
+                args.level,
+                {**options, **({"image": image} if image else {}), **({"canvas": canvas} if canvas else {})},
+            )
+            answer = solve(record)
+        except Exception:
+            # Instruction screens, transitions, half-drawn frames: just look again.
+            time.sleep(args.interval)
+            continue
+        signature = json.dumps([record["game"], record["puzzle"], answer], sort_keys=True)
+        if signature not in seen:
+            seen.add(signature)
+            text = describe(record, answer)
+            print(f"[{len(seen)}] {record['game']}: {text}", flush=True)
+            if args.json:
+                print(json.dumps(record), flush=True)
+            if args.overlay:
+                page.evaluate(OVERLAY, f"{record['game']}\n{text}")
+        index += 1
+        time.sleep(args.interval)
+    print(f"watched {args.watch:.0f} s, solved {len(seen)} item(s)", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     source = parser.add_mutually_exclusive_group(required=True)
@@ -90,8 +150,13 @@ def main(argv: list[str] | None = None) -> None:
     source.add_argument("--cdp", help="Attach to a running browser, e.g. http://localhost:9222")
     parser.add_argument("--match", default="tptests.com", help="Tab URL fragment to pick when attaching")
     parser.add_argument("--count", type=int, default=1, help="How many captures to take")
-    parser.add_argument("--interval", type=float, default=2.0, help="Seconds between captures")
+    parser.add_argument("--interval", type=float, default=1.0, help="Seconds between captures")
+    parser.add_argument("--watch", type=float, default=0.0, help="Poll for this many seconds, solving each new item")
+    parser.add_argument("--headless", action="store_true", help="Run --url without a window (you cannot click through guides)")
+    parser.add_argument("--keep-open", action="store_true", help="Leave the browser open until you press Enter")
     parser.add_argument("--timeout", type=float, default=20.0, help="Seconds to wait for the overlay")
+    parser.add_argument("--width", type=int, default=412, help="Window width; 412 makes the demo canvas 372 wide")
+    parser.add_argument("--height", type=int, default=900, help="Window height")
     parser.add_argument("--out", type=Path, default=Path("captures"), help="Where to keep snapshots")
     parser.add_argument("--game", default="", help="Force an adapter instead of detecting one")
     parser.add_argument("--level", default="unknown", help="Level label stored with every record")
@@ -108,40 +173,21 @@ def main(argv: list[str] | None = None) -> None:
         if args.cdp:
             browser, page = attach(playwright, args)
         else:
-            browser = playwright.chromium.launch()
-            page = browser.new_context(viewport={"width": 390, "height": 844}).new_page()
+            browser = playwright.chromium.launch(headless=args.headless)
+            page = browser.new_context(viewport={"width": args.width, "height": args.height}).new_page()
             page.goto(args.url, wait_until="domcontentloaded")
         try:
-            page.wait_for_selector(".mindmetriq-accessibility", timeout=args.timeout * 1000)
-            for index in range(args.count):
-                started = time.perf_counter()
-                snapshot, image = grab(page, args.out, index)
-                capture_ms = (time.perf_counter() - started) * 1000
-                try:
-                    record, notes = record_from_snapshot(
-                        snapshot,
-                        args.game or None,
-                        args.level,
-                        {**options, "image": image} if image else options,
-                    )
-                    answer = solve(record)
-                except Exception as error:  # mid-animation, wrong page, no shape yet
-                    print(f"[{index}] {type(error).__name__}: {error}", file=sys.stderr)
-                    if index + 1 < args.count:
-                        time.sleep(args.interval)
-                    continue
-                total_ms = (time.perf_counter() - started) * 1000
-                text = describe(record, answer)
-                print(f"[{index}] {record['game']}: {text}   capture {capture_ms:.0f} ms, total {total_ms:.0f} ms")
-                for note in notes:
-                    print(f"      note: {note}", file=sys.stderr)
-                if args.json:
-                    print(json.dumps(record))
-                if args.overlay:
-                    page.evaluate(OVERLAY, f"{record['game']}\n{text}")
-                if index + 1 < args.count:
-                    time.sleep(args.interval)
+            if args.watch:
+                watch(page, args, options)
+            else:
+                one_round(page, args, options, 0, wait=True)
         finally:
+            if args.keep_open:
+                print("browser left open; press Enter to close", file=sys.stderr)
+                try:
+                    input()
+                except EOFError:
+                    pass
             browser.close()
 
 

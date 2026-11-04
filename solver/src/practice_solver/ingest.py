@@ -21,7 +21,7 @@ from pathlib import Path
 
 from practice_solver.errors import SnapshotError
 from practice_solver.exact import solve as exact_solve
-from practice_solver.layout import LAYOUT_TOLERANCE, NET_LAYOUT
+from practice_solver.layout import LAYOUT_TOLERANCE, NET_LAYOUT, REFERENCE_WIDTH
 
 CLASS_TOKEN = "mindmetriq-accessibility"
 PX = re.compile(r"([a-z-]+)\s*:\s*(-?\d+(?:\.\d+)?)px")
@@ -96,10 +96,13 @@ class _Canvas(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.style: str | None = None
+        self.attributes: dict[str, str] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "canvas" and self.style is None:
-            self.style = dict(attrs).get("style") or ""
+        if tag == "canvas" and self.attributes is None:
+            values = {name: value or "" for name, value in attrs}
+            self.attributes = values
+            self.style = values.get("style") or ""
 
 
 def canvas_css(text: str) -> tuple[float, float] | None:
@@ -107,11 +110,16 @@ def canvas_css(text: str) -> tuple[float, float] | None:
     parser = _Canvas()
     parser.feed(text)
     parser.close()
-    if not parser.style:
-        return None
-    style = {name: float(value) for name, value in PX.findall(parser.style)}
-    if "width" in style and "height" in style:
-        return style["width"], style["height"]
+    if parser.style:
+        style = {name: float(value) for name, value in PX.findall(parser.style)}
+        if "width" in style and "height" in style:
+            return style["width"], style["height"]
+    if parser.attributes:
+        width, height = parser.attributes.get("width"), parser.attributes.get("height")
+        if width and height:
+            # A saved page without a CSS size is read at one device pixel per
+            # CSS pixel; the live capture measures the real box instead.
+            return float(width), float(height)
     return None
 
 
@@ -174,6 +182,15 @@ def net(markers: list[Marker], options: dict) -> tuple[dict, list[str]]:
     box = next((marker for marker in markers if marker.label.lower() == "glowing net"), None)
     if box is None:
         raise SnapshotError("No 'Glowing net' marker in the snapshot")
+    # The page sizes its canvas to the window and lays the board out proportionally.
+    # A 372 wide canvas is the reference the constants were measured on; anything
+    # else is the same design at a different scale.
+    canvas = options.get("canvas")
+    if canvas and abs(canvas[0] - REFERENCE_WIDTH) > 0.5:
+        factor = canvas[0] / REFERENCE_WIDTH
+        layout = dict(layout)
+        for key in ("left", "top", "pitch", "size", "pad"):
+            layout[key] = layout[key] * factor
     grid = [0] * (layout["n"] * layout["n"])
     filled: set[tuple[int, int]] = set()
     for marker in markers:

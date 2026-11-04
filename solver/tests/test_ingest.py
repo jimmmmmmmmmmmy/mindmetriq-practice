@@ -209,6 +209,48 @@ def test_net_cli_writes_every_page(tmp_path):
     assert json.dumps(rows[0])  # serialisable as written
 
 
+def test_a_narrower_canvas_scales_the_lattice(tmp_path):
+    """The page fits its canvas to the window, so the board is the same design smaller."""
+    from PIL import Image, ImageDraw
+
+    from practice_solver.layout import NET_LAYOUT
+
+    factor = 360 / 372
+    cells = {(0, 0): 9, (1, 1): -3}
+    markers = []
+    for (column, row), value in cells.items():
+        markers.append(
+            f'<div class="mindmetriq-accessibility" aria-label="{value}" style="width: {NET_LAYOUT["size"] * factor}px; '
+            f'height: {NET_LAYOUT["size"] * factor}px; left: {(NET_LAYOUT["left"] + column * NET_LAYOUT["pitch"]) * factor}px; '
+            f'top: {(NET_LAYOUT["top"] + row * NET_LAYOUT["pitch"]) * factor}px;"></div>'
+        )
+    markers.append(
+        f'<div class="mindmetriq-accessibility" aria-label="Glowing net" style="width: {2 * NET_LAYOUT["pitch"] * factor}px; '
+        f'height: {2 * NET_LAYOUT["pitch"] * factor}px; left: {(NET_LAYOUT["left"] - NET_LAYOUT["pad"]) * factor}px; '
+        f'top: {(NET_LAYOUT["top"] - NET_LAYOUT["pad"]) * factor}px;"></div>'
+    )
+    page = (
+        f'<html><body><canvas id="mindmetriq" width="360" height="640"></canvas>'
+        + "".join(markers)
+        + "</body></html>"
+    )
+    snapshot = tmp_path / "narrow.html"
+    snapshot.write_text(page, encoding="utf-8")
+    image = Image.new("RGB", (360, 640), (249, 245, 245))
+    pen = ImageDraw.Draw(image)
+    for column, row in ((0, 0), (1, 0), (1, 1)):
+        x = (NET_LAYOUT["left"] + column * NET_LAYOUT["pitch"]) * factor
+        y = (NET_LAYOUT["top"] + row * NET_LAYOUT["pitch"]) * factor
+        pen.rectangle([x + 1, y + 1, x + NET_LAYOUT["pitch"] * factor - 1, y + NET_LAYOUT["pitch"] * factor - 1], fill=(216, 218, 220))
+    image.save(snapshot.with_suffix(".png"))
+
+    records, _report = ingest([snapshot])
+    puzzle = records[0]["puzzle"]
+    assert puzzle["g"][0] == 9
+    assert puzzle["g"][1 * 5 + 1] == -3
+    assert puzzle["sh"]["cells"] == [[0, 0], [1, 0], [1, 1]]
+
+
 def test_sibling_screenshot_supplies_the_net_shape(tmp_path):
     """A capture writes page.html next to page.png; ingest should pair them."""
     from PIL import Image, ImageDraw
