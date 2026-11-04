@@ -44,6 +44,7 @@ section + section { margin-top: 20px; }
 .numerical { --accent: #8f4b4b; }
 .verbal { --accent: #8c7a3c; }
 .logical { --accent: #4e7590; }
+.aptitude { --accent: #2f6f5e; }
 
 h2 {
   display: flex;

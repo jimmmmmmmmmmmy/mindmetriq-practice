@@ -14,3 +14,5 @@ These are unofficial personal-practice remakes, unaffiliated with Test Partnersh
 | Shape Spinner | 10 | 12 s per wheel | Every pair must share shape XOR shading. |
 
 Practice has three questions in each game except Link Swipe, which has four pairs. Every game also has practice feedback and a hard drill with 25% less time. Racer hard drill reduces both planning and falling time. Correct answers raise the next requested level; wrong answers lower it, within levels 1–5. The result table records the actual selected difficulty. Best timed-test scores exclude practice and hard drill.
+
+Aptitude Mock is a separate unofficial Criteria-style drill: 50 original questions in 15:00, plus 10-question math, spatial, and verbal drills. You answer before advancing, and there is no back button or pause. It is not affiliated with Criteria and does not use CCAT items.

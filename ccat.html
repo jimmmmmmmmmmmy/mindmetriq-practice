@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aptitude Mock practice</title>
+  <link rel="stylesheet" href="css/ccat.css?v=ccat-20261104">
+</head>
+<body>
+  <main id="app">
+    <section class="screen on" id="sIntro">
+      <div class="pad">
+        <a class="back" href="index.html">&larr; All games</a>
+        <div class="cat"><i></i>Cognitive</div>
+        <h1>Aptitude Mock</h1>
+        <p class="lede">Fifty original questions and a 15-minute clock, mixed across math, spatial, and verbal items. Or drill one area.</p>
+        <div class="modes">
+          <button class="btn primary" id="startMock" type="button">Full mock<small>50 questions · 15:00 · no pause</small></button>
+          <button class="btn" type="button" data-area="math">Math &amp; logic drill<small>10 questions · timed</small></button>
+          <button class="btn" type="button" data-area="spatial">Spatial drill<small>10 questions · timed</small></button>
+          <button class="btn" type="button" data-area="verbal">Verbal drill<small>10 questions · timed</small></button>
+        </div>
+        <label class="pace">Seconds per drill question
+          <input id="pace" type="number" min="8" max="90" value="18" inputmode="numeric">
+        </label>
+        <details class="rules">
+          <summary>How a run works</summary>
+          <ul>
+            <li>Choose an answer, then continue. The next question waits until you do.</li>
+            <li>There is no back button and no pause. The clock keeps running.</li>
+            <li>At 0:00 the run submits. A selected answer counts. A blank one does not.</li>
+          </ul>
+        </details>
+        <div id="histIntro"></div>
+        <p class="note">Unofficial practice. Questions are generated in this browser and are not Criteria or CCAT items.</p>
+      </div>
+    </section>
+    <section class="screen" id="sRun" aria-label="Aptitude run">
+      <div class="game-header">
+        <div class="tbar"><div id="hBar"></div></div>
+        <div class="hud">
+          <span><b id="hNum">1</b> <span class="of">of <span id="hTot">50</span></span></span>
+          <span class="ttl" id="hMode">Full mock</span>
+          <span id="hTime" role="timer">15:00</span>
+        </div>
+      </div>
+      <div id="live" class="sr-only" role="status"></div>
+      <div id="stage">
+        <p class="area" id="qArea"></p>
+        <h2 id="qPrompt" tabindex="-1"></h2>
+        <div id="qStim"></div>
+        <div id="qChoices" role="radiogroup" aria-labelledby="qPrompt"></div>
+      </div>
+      <div class="foot">
+        <p>Choose an answer to continue. You cannot go back.</p>
+        <button type="button" class="btn primary" id="next" disabled>Next</button>
+      </div>
+    </section>
+    <section class="screen" id="sEnd"><div class="pad" id="endBody"></div></section>
+  </main>
+  <script src="js/ccat-items.js?v=ccat-20261104"></script>
+  <script src="js/ccat-session.js?v=ccat-20261104"></script>
+  <script src="js/ccat-history.js?v=ccat-20261104"></script>
+  <script src="js/ccat-svg.js?v=ccat-20261104"></script>
+  <script src="js/ccat-ui.js?v=ccat-20261104"></script>
+</body>
+</html>
