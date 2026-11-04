@@ -31,6 +31,23 @@ npm run test:browser
 
 Each game also has a short practice round and a hard drill with 25% less time. A correct answer raises the next requested level and a miss lowers it, within levels 1–5. The result screen shows accuracy, response time, and difficulty. History is kept in `localStorage`. Best badges count standalone timed runs and full-mock sections, not practice or hard drill.
 
+## Solver
+
+`solver/` is a standalone Python package (Torch optional, used only for two small nets) that reads puzzles as JSONL. Two ways in, one record shape out:
+
+1. `export` generates boards from this repo's own generators.
+2. `ingest` converts a saved page from the live product: it reads the accessibility overlay the page renders beside its canvas, rebuilds the board, and labels it with the exact solver.
+
+```bash
+pip install -e "./solver[dev]"
+practice-solver ingest snapshots/racer-q1.html --out records/racer.jsonl
+practice-solver solve records/racer.jsonl              # exact
+practice-solver eval --data records/racer.jsonl        # accuracy report
+python solver/scripts/live_capture.py --cdp http://localhost:9222 --overlay   # live, Playwright
+```
+
+Captured records are tagged `distribution: mindmetriq-dom` and their labels are marked `derived: exact`, so real pages never get mixed with generated training data or mistaken for a human answer key. Every game has an exact solver; Shape Spinner and Pipe Puzzle also have trained networks scored against those exact solvers on seeds the models never saw. Two of the six games need more than the DOM: Number Racer is fully described by its overlay, while Net the Numbers hides the net's shape, which is read from a canvas screenshot instead. See [solver/README.md](solver/README.md) for the accuracy tables and validity limits.
+
 ## Sources
 
 - [MindmetriQ game tasks and current question counts](https://www.testpartnership.com/gamified-assessment.html)

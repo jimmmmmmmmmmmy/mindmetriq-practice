@@ -8,9 +8,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from practice_solver.evaluate import evaluate, format_report
 from practice_solver.exact import solve
-from practice_solver.train import train
+from practice_solver.ingest import ingest
+from practice_solver.io import dump_jsonl
 
 EXPORT = Path(__file__).resolve().parents[2] / "scripts" / "export_puzzles.cjs"
 WEIGHTS = Path(__file__).resolve().parent / "weights"
@@ -28,6 +28,33 @@ def _export(args: argparse.Namespace) -> None:
     if args.games:
         command.extend(["--games", args.games])
     subprocess.run(command, check=True)
+
+
+def _ingest(args: argparse.Namespace) -> None:
+    options = {}
+    if args.net_shape:
+        options["net_shape"] = args.net_shape
+    if args.net_box:
+        options["net_box"] = True
+    records, report = ingest(args.snapshots, args.game or None, args.level, args.skip_invalid, options)
+    if not records:
+        raise SystemExit("No snapshot could be read")
+    dump_jsonl(args.out, records)
+    for line in report:
+        print(line, file=sys.stderr)
+    print(f"wrote {len(records)} record(s) to {args.out}")
+
+
+def _train(args: argparse.Namespace) -> None:
+    from practice_solver.train import train
+
+    train(args.data, args.out_dir, args.epochs, tuple(args.games.split(",")))
+
+
+def _eval(args: argparse.Namespace) -> None:
+    from practice_solver.evaluate import evaluate, format_report
+
+    print(format_report(evaluate(args.data, args.weights)), end="")
 
 
 def _solve(args: argparse.Namespace) -> None:
@@ -76,11 +103,28 @@ def main(argv: list[str] | None = None) -> None:
     training.add_argument("--out-dir", type=Path, default=WEIGHTS)
     training.add_argument("--epochs", type=int, default=30)
     training.add_argument("--games", default="spinner,pipes")
-    training.set_defaults(func=lambda args: train(args.data, args.out_dir, args.epochs, tuple(args.games.split(","))))
+    training.set_defaults(func=_train)
     evaluation = sub.add_parser("eval", help="Score exact solvers and saved networks")
     evaluation.add_argument("--data", type=Path, required=True)
     evaluation.add_argument("--weights", type=Path, default=WEIGHTS)
-    evaluation.set_defaults(func=lambda args: print(format_report(evaluate(args.data, args.weights)), end=""))
+    evaluation.set_defaults(func=_eval)
+    ingesting = sub.add_parser("ingest", help="Convert saved game page snapshots into JSONL")
+    ingesting.add_argument("snapshots", nargs="+", type=Path)
+    ingesting.add_argument("--out", type=Path, required=True)
+    ingesting.add_argument("--game", default="", help="Force an adapter instead of detecting one")
+    ingesting.add_argument("--level", default="unknown", help="Level label stored with every record")
+    ingesting.add_argument("--skip-invalid", action="store_true", help="Keep going past unreadable snapshots")
+    ingesting.add_argument(
+        "--net-shape",
+        default="",
+        help="Net cells as rows of digits, e.g. 111/010/111; required for Net the Numbers",
+    )
+    ingesting.add_argument(
+        "--net-box",
+        action="store_true",
+        help="Accept the net's bounding box as its shape, for nets that really are rectangles",
+    )
+    ingesting.set_defaults(func=_ingest)
     solving = sub.add_parser("solve", help="Solve one exported JSON record")
     solving.add_argument("puzzle", type=Path)
     solving.add_argument("--method", choices=("exact", "ml"), default="exact")
