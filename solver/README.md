@@ -31,6 +31,29 @@ practice-solver export --count 40 --seed 1000 --out solver/fixtures/eval.jsonl \
 
 Each line is `{"game","level","puzzle","truth"}`. `puzzle` is the generated board or question. `truth` is the generator's answer, used only as a label. `solve` does not read it.
 
+## Ingest a captured game page
+
+The product pages paint a canvas, so their only machine-readable state is the accessibility overlay: one `div.mindmetriq-accessibility` per object, carrying an `aria-label` and a pixel position. Save the page while a question is on screen (**Save page as, Webpage, Complete**, or copy the element's outer HTML), then convert it:
+
+```bash
+practice-solver ingest snapshots/*.html --out records/racer.jsonl --level 1
+```
+
+The output is the same record shape as `export`, so `solve`, `eval`, and `train` consume it unchanged. Differences from generated data:
+
+| Field | Value |
+|---|---|
+| `distribution` | `mindmetriq-dom`, so captured and generated puzzles can be split |
+| `truth.derived` | `exact` — a live page has no answer key, so the label is the exact solver's own answer |
+| `source` | snapshot file name and the question counter the page showed |
+| `level` | whatever `--level` was passed; the page does not expose the adaptive level |
+
+Board properties the generator guarantees are checked, not assumed: warnings go to stderr (`N blocks`, `target equals a single block`, `catching every block reaches the target`) and the record is still written. A snapshot with no solution — saved mid-animation, wrong frame — is refused rather than written; `--skip-invalid` keeps the rest of a batch.
+
+Adapters live in `practice_solver/ingest.py` (`ADAPTERS`). Number Racer reads `Collectable n` blocks in vertical order plus the single `Target n`. A page with labels no adapter knows is rejected with the label list printed, which is what a new adapter needs.
+
+No capture step is automated here: the package still opens no browser and touches no network. Snapshots are local files.
+
 ## Solve one record
 
 ```bash
