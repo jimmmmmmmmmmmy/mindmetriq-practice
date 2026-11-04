@@ -34,6 +34,8 @@ def _ingest(args: argparse.Namespace) -> None:
     options = {}
     if args.net_shape:
         options["net_shape"] = args.net_shape
+    if args.net_box:
+        options["net_box"] = True
     records, report = ingest(args.snapshots, args.game or None, args.level, args.skip_invalid, options)
     if not records:
         raise SystemExit("No snapshot could be read")
@@ -115,7 +117,12 @@ def main(argv: list[str] | None = None) -> None:
     ingesting.add_argument(
         "--net-shape",
         default="",
-        help="Net cells as rows of digits, e.g. 111/010/111; default is the net's full box",
+        help="Net cells as rows of digits, e.g. 111/010/111; required for Net the Numbers",
+    )
+    ingesting.add_argument(
+        "--net-box",
+        action="store_true",
+        help="Accept the net's bounding box as its shape, for nets that really are rectangles",
     )
     ingesting.set_defaults(func=_ingest)
     solving = sub.add_parser("solve", help="Solve one exported JSON record")

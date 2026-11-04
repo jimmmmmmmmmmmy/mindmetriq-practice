@@ -182,11 +182,13 @@ def net(markers: list[Marker], options: dict) -> tuple[dict, list[str]]:
     spec = options.get("net_shape")
     if spec:
         shape = _shape(spec)
-    else:
+    elif options.get("net_box"):
         shape = {"cells": [[x, y] for y in range(height) for x in range(width)], "w": width, "h": height}
-        notes.append(
-            f"net shape taken from the {width} by {height} box; the overlay does not expose its interior "
-            "(pass --net-shape if the net is not a full rectangle)"
+        notes.append(f"net shape taken from the {width} by {height} box, as requested by net_box")
+    else:
+        raise SnapshotError(
+            f"the overlay carries only the net's {width} by {height} box, not its cells; "
+            "pass --net-shape (rows of 0/1, e.g. 110/011) or --net-box to accept the box as the shape"
         )
     puzzle = {"g": grid, "sh": shape, "_net": [column, row]}
     return puzzle, notes

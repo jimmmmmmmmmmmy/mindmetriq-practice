@@ -55,7 +55,9 @@ Adapters live in `practice_solver/ingest.py` (`ADAPTERS`). A page with labels no
 | Game | Markers read | Anything the overlay does not carry |
 |---|---|---|
 | Number Racer | `Collectable n` blocks ordered by vertical position, one `Target n` | nothing; the blocks and the target are the whole item |
-| Net the Numbers | numbered cells placed on the 5 by 5 lattice (blank cells are simply absent), plus the `Glowing net` box | the net's interior cells. The box gives its width and height only, so the shape defaults to that full rectangle and every record carries a warning saying so. Pass `--net-shape 111/010/111` when the net is a polyomino; rows are read top to bottom, `1` is a covered cell. |
+| Net the Numbers | numbered cells placed on the 5 by 5 lattice (blank cells are simply absent), plus the `Glowing net` box | the net's interior cells. The box gives width and height only, so the adapter **refuses** the page until you pass `--net-shape 110/011`, rows read top to bottom with `1` as a covered cell. `--net-box` accepts the box as the shape, for nets that really are rectangles. |
+
+The publisher's own technical manual (Figure 1) shows the net as a four-cell Z tetromino inside a 3 by 2 box, so treating the box as the shape is wrong in general and is opt-in for that reason. Boxes across five saved pages measured 3×3, 2×3, 3×3, 3×2 and 2×3, so the net is not one fixed shape across items either; the shape has to come from the page you saved.
 
 The grid, cell size, and pitch are constants read off the product's canvas (`NET_LAYOUT`). Every marker is checked against that lattice, so a renderer change fails loudly instead of quietly shifting numbers to the wrong cell. The question counter is taken from the marker sitting immediately left of `of N`, which keeps bare numbers like a countdown timer out of the grid.
 

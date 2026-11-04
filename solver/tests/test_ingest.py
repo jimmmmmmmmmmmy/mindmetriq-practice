@@ -143,7 +143,7 @@ def best_rectangle_sum(grid: list[int], width: int, height: int) -> int:
 @pytest.mark.parametrize("number", sorted(NET_BOARDS))
 def test_net_pages_rebuild_their_grids(number):
     grid, (width, height), net_at = NET_BOARDS[number]
-    record, warnings = record_from_snapshot(FIXTURES / f"net-practice-{number}.html")
+    record, warnings = record_from_snapshot(FIXTURES / f"net-practice-{number}.html", options={"net_box": True})
     assert record["game"] == "net"
     assert record["puzzle"]["g"] == [value for row in grid for value in row]
     assert record["puzzle"]["sh"]["w"] == width
@@ -155,8 +155,15 @@ def test_net_pages_rebuild_their_grids(number):
     assert any("net shape taken from" in warning for warning in warnings)
 
 
+def test_net_refuses_to_guess_the_shape():
+    # The overlay carries the net's bounding box only, and the publisher's own
+    # figure shows a four-cell Z, not a rectangle. Guessing is worse than failing.
+    with pytest.raises(SnapshotError, match="pass --net-shape"):
+        record_from_snapshot(FIXTURES / "net-practice-1.html")
+
+
 def test_net_page_counter_and_timer_are_not_cells():
-    record, _ = record_from_snapshot(FIXTURES / "net-practice-1.html")
+    record, _ = record_from_snapshot(FIXTURES / "net-practice-1.html", options={"net_box": True})
     assert record["source"]["question"] == "1 of 3"
     assert max(abs(value) for value in record["puzzle"]["g"]) == 9
 
@@ -194,7 +201,7 @@ def test_net_marker_off_the_lattice_is_rejected(tmp_path):
 def test_net_cli_writes_every_page(tmp_path):
     out = tmp_path / "net.jsonl"
     pages = [str(FIXTURES / f"net-practice-{number}.html") for number in sorted(NET_BOARDS)]
-    main(["ingest", *pages, "--out", str(out), "--level", "1"])
+    main(["ingest", *pages, "--out", str(out), "--level", "1", "--net-box"])
     rows = load_jsonl(out)
     assert len(rows) == 5
     assert {row["game"] for row in rows} == {"net"}
