@@ -31,7 +31,10 @@ def _export(args: argparse.Namespace) -> None:
 
 
 def _ingest(args: argparse.Namespace) -> None:
-    records, report = ingest(args.snapshots, args.game or None, args.level, args.skip_invalid)
+    options = {}
+    if args.net_shape:
+        options["net_shape"] = args.net_shape
+    records, report = ingest(args.snapshots, args.game or None, args.level, args.skip_invalid, options)
     if not records:
         raise SystemExit("No snapshot could be read")
     dump_jsonl(args.out, records)
@@ -109,6 +112,11 @@ def main(argv: list[str] | None = None) -> None:
     ingesting.add_argument("--game", default="", help="Force an adapter instead of detecting one")
     ingesting.add_argument("--level", default="unknown", help="Level label stored with every record")
     ingesting.add_argument("--skip-invalid", action="store_true", help="Keep going past unreadable snapshots")
+    ingesting.add_argument(
+        "--net-shape",
+        default="",
+        help="Net cells as rows of digits, e.g. 111/010/111; default is the net's full box",
+    )
     ingesting.set_defaults(func=_ingest)
     solving = sub.add_parser("solve", help="Solve one exported JSON record")
     solving.add_argument("puzzle", type=Path)

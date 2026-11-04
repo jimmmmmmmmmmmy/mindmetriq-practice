@@ -50,7 +50,14 @@ The output is the same record shape as `export`, so `solve`, `eval`, and `train`
 
 Board properties the generator guarantees are checked, not assumed: warnings go to stderr (`N blocks`, `target equals a single block`, `catching every block reaches the target`) and the record is still written. A snapshot with no solution — saved mid-animation, wrong frame — is refused rather than written; `--skip-invalid` keeps the rest of a batch.
 
-Adapters live in `practice_solver/ingest.py` (`ADAPTERS`). Number Racer reads `Collectable n` blocks in vertical order plus the single `Target n`. A page with labels no adapter knows is rejected with the label list printed, which is what a new adapter needs.
+Adapters live in `practice_solver/ingest.py` (`ADAPTERS`). A page with labels no adapter knows is rejected with the label list printed, which is what a new adapter needs.
+
+| Game | Markers read | Anything the overlay does not carry |
+|---|---|---|
+| Number Racer | `Collectable n` blocks ordered by vertical position, one `Target n` | nothing; the blocks and the target are the whole item |
+| Net the Numbers | numbered cells placed on the 5 by 5 lattice (blank cells are simply absent), plus the `Glowing net` box | the net's interior cells. The box gives its width and height only, so the shape defaults to that full rectangle and every record carries a warning saying so. Pass `--net-shape 111/010/111` when the net is a polyomino; rows are read top to bottom, `1` is a covered cell. |
+
+The grid, cell size, and pitch are constants read off the product's canvas (`NET_LAYOUT`). Every marker is checked against that lattice, so a renderer change fails loudly instead of quietly shifting numbers to the wrong cell. The question counter is taken from the marker sitting immediately left of `of N`, which keeps bare numbers like a countdown timer out of the grid.
 
 No capture step is automated here: the package still opens no browser and touches no network. Snapshots are local files.
 
