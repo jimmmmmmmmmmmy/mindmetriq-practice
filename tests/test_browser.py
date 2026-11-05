@@ -478,5 +478,46 @@ class BrowserTests(unittest.TestCase):
         self.page.goto(self.base)
         self.assertEqual(self.page.locator('[data-id=swipe] .best').inner_text(), '')
 
+    def test_ccat_requires_an_answer_and_submits_when_time_runs_out(self):
+        urls = []
+        self.page.on('request', lambda request: urls.append(request.url))
+        self.page.goto(self.base + 'ccat.html?debug=1')
+        self.assertIn('on', self.page.locator('#sIntro').get_attribute('class'))
+        self.page.locator('#startMock').click()
+        self.assertEqual(self.page.locator('#hTime').inner_text(), '15:00')
+        self.assertEqual(self.page.locator('#hNum').inner_text(), '1')
+        self.assertEqual(self.page.locator('#hTot').inner_text(), '50')
+        self.assertTrue(self.page.locator('#next').is_disabled())
+        self.assertEqual(self.page.locator('#sRun .back, #sRun #pause, #sRun [data-action=back]').count(), 0)
+        self.page.locator('.choice').first.click()
+        self.assertFalse(self.page.locator('#next').is_disabled())
+        self.page.locator('#next').click()
+        self.assertEqual(self.page.locator('#hNum').inner_text(), '2')
+        self.assertEqual(self.page.evaluate('__ccat.session.view(performance.now()).canGoBack'), False)
+        self.assertEqual(self.page.evaluate('__ccat.session.view(performance.now()).canPause'), False)
+        self.page.clock.fast_forward(15 * 60 * 1000)
+        self.assertIn('/ 50', self.page.locator('#endScore').inner_text())
+        record = self.page.evaluate('CCATHistory.read().at(-1)')
+        self.assertEqual((record['mode'], record['total']), ('mock', 50))
+        self.assertGreaterEqual(record['attempted'], 1)
+        self.assertGreater(self.page.locator('#review .miss').count(), 0)
+        for url in urls:
+            self.assertTrue(url.startswith(self.base), url)
+
+    def test_ccat_drill_pace_and_production_hides_the_debug_hook(self):
+        self.page.goto(self.base + 'ccat.html')
+        self.assertTrue(self.page.evaluate('window.__ccat === undefined'))
+        self.page.locator('#pace').fill('8')
+        self.page.locator('[data-area=spatial]').click()
+        self.assertEqual(self.page.locator('#hTime').inner_text(), '1:20')
+        self.assertEqual(self.page.locator('#hTot').inner_text(), '10')
+        self.assertGreater(self.page.locator('#qStim svg, #qChoices svg').count(), 0)
+        self.page.locator('.choice').first.click()
+        self.page.locator('#next').click()
+        self.assertEqual(self.page.locator('#hNum').inner_text(), '2')
+        self.page.clock.fast_forward(81_000)
+        self.assertEqual(self.page.locator('#endScore').inner_text().split(' / ')[1], '10')
+        self.assertGreater(self.page.locator('.miss').count(), 0)
+
 if __name__ == '__main__':
     unittest.main()
